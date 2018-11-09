@@ -1,0 +1,6 @@
+out/
+gen/
+.gradle/
+build/
+src/main/gen/
+.idea/
