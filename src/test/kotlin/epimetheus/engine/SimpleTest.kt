@@ -65,15 +65,21 @@ class SimpleTest {
         val mg = MockGateway()
         mg.pushScraped("", 0, listOf(
                 ScrapedSample.create("a", 1.0),
-                ScrapedSample.create("b", 3.0)
+                ScrapedSample.create("b", 3.0),
+                ScrapedSample.create("c", -3.0),
+                ScrapedSample.create("z", 0.0)
         ))
         mg.pushScraped("", 1, listOf(
                 ScrapedSample.create("a", 2.0),
-                ScrapedSample.create("b", 4.0)
+                ScrapedSample.create("b", 4.0),
+                ScrapedSample.create("c", -3.0),
+                ScrapedSample.create("z", 0.0)
         ))
         mg.pushScraped("", 2, listOf(
                 ScrapedSample.create("a", 3.0),
-                ScrapedSample.create("b", 5.0)
+                ScrapedSample.create("b", 5.0),
+                ScrapedSample.create("c", -3.0),
+                ScrapedSample.create("z", 0.0)
         ))
         val interp = Interpreter(mg)
         val tf = TimeFrames(0, 3, 1)
@@ -84,7 +90,9 @@ class SimpleTest {
                 "2 * a" to doubleArrayOf(6.0, 4.0, 2.0),
                 "b * a" to doubleArrayOf(15.0, 8.0, 3.0),
                 "a + b + 1" to doubleArrayOf(9.0, 7.0, 5.0),
-                "a / 0" to doubleArrayOf(Double.NaN, Double.NaN, Double.NaN)
+                "a / 0" to doubleArrayOf(Double.POSITIVE_INFINITY, Double.POSITIVE_INFINITY, Double.POSITIVE_INFINITY),  // positive number / 0.0 --> +Inf in prometheus
+                "c / 0" to doubleArrayOf(Double.NEGATIVE_INFINITY, Double.NEGATIVE_INFINITY, Double.NEGATIVE_INFINITY),  // positive number / 0.0 --> +Inf in prometheus
+                "z / 0" to doubleArrayOf(Double.NaN, Double.NaN, Double.NaN)  // positive number / 0.0 --> +Inf in prometheus
         ).forEach { case ->
             val mat = interp.eval(case.first, tf)
             assertValueEquals(GridMat.of(tf, Metric.empty to case.second), mat, allowNonDetComparsion = true)
