@@ -29,7 +29,7 @@ class FullLoggingTracer : Tracer {
 
     override fun enteringEvalExpr(ast: Expression, depth: Int) {
         // step in
-        if (depth > lastDepth) {
+        if (depth >= lastDepth) {
             timerStack.push(System.nanoTime())
         }
         lastDepth = depth

@@ -163,18 +163,18 @@ class PromSpec(val lines: List<String>) : Executable {
             }
             val tracer = FullLoggingTracer()
             val result = ctx.interpreter.evalAst(expr, tf, tracer)
-            val series = specs.map {
-                when (it) {
-                    is SpecSeriesDesc -> {
-                        Metric(it.m) to Mat.mapValue(it.expand(null))
-                    }
-                    is SpecLiteralDesc -> {
-                        Metric.literal to Mat.mapValue(it.expand(null))
-                    }
-                    else -> throw RuntimeException("never here")
+            val expected = if (specs.isNotEmpty() && specs.all { it is SpecLiteralDesc }) {
+                assert(specs.size == 1 && specs[0].series.size == 1)
+                val vals= specs[0].series[0].expand(null)
+                assert(vals.size == 1 && vals[0] != null)
+                Scalar(vals[0]!!)
+            } else {
+                val series = specs.map {
+                    it as SpecSeriesDesc
+                    Metric(it.m) to Mat.mapValue(it.expand(null))
                 }
+                Mat.instant(series.map { it.first }.toTypedArray(), offset.toMillis(), series.map { it.second[0] })
             }
-            val expected = Mat.instant(series.map { it.first }.toTypedArray(), offset.toMillis(), series.map { it.second[0] })
             try {
                 TestUtils.assertValueEquals(expected, result, true, true)
             } catch (e: AssertionError) {
@@ -231,7 +231,7 @@ object PromSpecTests {
     fun fromPrometheus(): Collection<DynamicTest> {
         val res = PromSpecTests::class.java.getResource("promspec/prometheus")
         val files = File(res.path).listFiles()
-        return files.filter { it.name == "staleness.test" }.map {
+        return files.filter { it.name == "literals.test" || it.name == "staleness.test" || it.name == "selectors.test" }.map {
             it.inputStream().use { input ->
                 val lines = IOUtils.readLines(input, Charsets.UTF_8)
                         .map { it.trim() }

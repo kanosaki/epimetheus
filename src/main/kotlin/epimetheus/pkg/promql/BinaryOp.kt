@@ -146,8 +146,13 @@ data class BinaryOp(
                         gridMatAndMat = simpleOp { lvals, rvals ->
                             val resvals = DoubleArray(lvals.size)
                             for (i in 0..(lvals.size - 1)) {
-                                if (rvals[i] == 0.0 || rvals[i] == -0.0) {
-                                    resvals[i] = Double.NaN
+                                if (rvals[i] == 0.0) {
+                                    val lv = lvals[i]
+                                    resvals[i] = when {
+                                        lv == 0.0 -> Double.NaN
+                                        lv > 0.0 -> Double.POSITIVE_INFINITY
+                                        else -> Double.NEGATIVE_INFINITY
+                                    }
                                 } else {
                                     resvals[i] = lvals[i] / rvals[i]
                                 }
@@ -158,8 +163,12 @@ data class BinaryOp(
                             val sval = s.value
                             val resvals = DoubleArray(m.size)
                             for (i in 0..(m.size - 1)) {
-                                if (m[i] == 0.0 || m[i] == -0.0) {
-                                    resvals[i] = Double.NaN
+                                if (m[i] == 0.0) {
+                                    resvals[i] = when {
+                                        sval == 0.0 -> Double.NaN
+                                        sval > 0.0 -> Double.POSITIVE_INFINITY
+                                        else -> Double.NEGATIVE_INFINITY
+                                    }
                                 } else {
                                     resvals[i] = sval / m[i]
                                 }
@@ -168,18 +177,28 @@ data class BinaryOp(
                         },
                         gridMatAndScalar = matScala { m, s ->
                             val sval = s.value
-                            if (sval == 0.0 || sval == -0.0) {
-                                return@matScala DoubleArray(m.size) { Double.NaN }
-                            }
                             val resvals = DoubleArray(m.size)
                             for (i in 0..(m.size - 1)) {
-                                resvals[i] = m[i] / sval
+                                if (sval == 0.0) {
+                                    val lv = m[i]
+                                    resvals[i] = when {
+                                        lv == 0.0 -> Double.NaN
+                                        lv > 0.0 -> Double.POSITIVE_INFINITY
+                                        else -> Double.NEGATIVE_INFINITY
+                                    }
+                                } else {
+                                    resvals[i] = m[i] / sval
+                                }
                             }
                             resvals
                         },
                         scalarAndScalar = { s1, s2 ->
-                            if (s2.value == 0.0 || s2.value == -0.0) {
-                                Scalar(Double.NaN)
+                            if (s2.value == 0.0) {
+                                when {
+                                    s1.value == 0.0 -> Scalar(Double.NaN)
+                                    s1.value > 0.0 -> Scalar(Double.POSITIVE_INFINITY)
+                                    else -> Scalar(Double.NEGATIVE_INFINITY)
+                                }
                             } else {
                                 Scalar(s1.value / s2.value)
                             }
