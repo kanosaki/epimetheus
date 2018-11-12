@@ -174,7 +174,7 @@ class PromSpec(val lines: List<String>) : Executable {
                     else -> throw RuntimeException("never here")
                 }
             }
-            val expected = Mat.of(tf, *series.toTypedArray())
+            val expected = Mat.instant(series.map { it.first }.toTypedArray(), offset.toMillis(), series.map { it.second[0] })
             try {
                 TestUtils.assertValueEquals(expected, result, true, true)
             } catch (e: AssertionError) {
@@ -182,12 +182,13 @@ class PromSpec(val lines: List<String>) : Executable {
                 println("====== Eval TRACE")
                 tracer.printTrace()
                 println("====== Eval EXPECTED")
-                println(expected.toTable().printAll())
+                println(expected)
                 println("====== Eval ACTUAL")
                 when (result) {
-                    is Mat -> println(result.toTable().printAll())
+                    is GridMat -> println(result.toTable().printAll())
                     is Scalar -> println("SCALAR ${result.value}")
-                    else -> println("UNKNOWN Value type: ${result.javaClass}")
+                    is VarMat -> println(result)
+                    else -> println("UNKNOWN Value type: ${result.javaClass}: $result")
                 }
                 throw e
             }

@@ -40,10 +40,6 @@ ext {
     junit5JupiterVersion = "5.+"
 }
 
-junitPlatform {
-    enableStandardTestTask true
-}
-
 repositories {
     mavenCentral()
     jcenter()

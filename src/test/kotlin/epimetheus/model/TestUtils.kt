@@ -7,11 +7,13 @@ object TestUtils {
     const val DOUBLE_COMPARE_DELTA = 10e-9
 
     fun assertValueEquals(m1: Value, m2: Value, allowNonDetComparsion: Boolean = false, prune: Boolean = false) {
-        if (m1 is Mat && m2 is Mat) {
+        val gm1 = (m1 as? GridMat) ?: (m1 as? VarMat)?.asInstant()
+        val gm2 = (m2 as? GridMat) ?: (m2 as? VarMat)?.asInstant()
+        if (gm1 != null && gm2 != null) {
             return if (prune) {
-                assertMatEquals(m1.prune(), m2.prune(), allowNonDetComparsion)
+                assertMatEquals(gm1.prune(), gm2.prune(), allowNonDetComparsion)
             } else {
-                assertMatEquals(m1, m2, allowNonDetComparsion)
+                assertMatEquals(gm1, gm2, allowNonDetComparsion)
             }
         } else if (m1 is Scalar && m2 is Scalar) {
             if (!compareDouble(m1.value, m2.value, allowNonDetComparsion)) {
@@ -37,7 +39,7 @@ object TestUtils {
         return false
     }
 
-    fun assertMatEquals(m1: Mat, m2: Mat, allowNonDetComparsion: Boolean = false) {
+    fun assertMatEquals(m1: GridMat, m2: GridMat, allowNonDetComparsion: Boolean = false) {
         assertEquals(m1.timestamps, m2.timestamps, "Timestamp mismatch")
         if (m1.metrics.size != m2.metrics.size) {
             fail("metric number mismatch: : expected: ${m1.metrics.size} != actual: ${m2.metrics.size}")

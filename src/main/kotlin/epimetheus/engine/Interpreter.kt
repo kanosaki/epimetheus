@@ -15,6 +15,6 @@ class Interpreter(val storage: Gateway) {
 
     fun evalAst(query: Expression, frames: TimeFrames, tracer: Tracer = Tracer.empty): Value {
         val evalCtx = Eval(frames, storage, tracer)
-        return evalCtx.evalExpr(query, 0)
+        return evalCtx.eval(query)
     }
 }

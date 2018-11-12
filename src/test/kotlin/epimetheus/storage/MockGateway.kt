@@ -23,7 +23,20 @@ class MockGateway() : Gateway, MetricRegistory {
         }
     }
 
-    override fun collect(query: MetricMatcher, range: TimeFrames): Mat {
+    override fun collectSeries(query: MetricMatcher, range: TimeFrames): VarMat {
+        val serieses = metrics.values
+                .filter { query.matches(it) }
+                .map {
+                    val sig = it.fingerprint()
+                    val wholeData = datum[sig]!!
+                    Series(sig, wholeData.values.toDoubleArray(), wholeData.keys.toLongArray())
+                }
+                .sortedBy { it.metricID }
+        val metrics= serieses.map { metrics[it.metricID]!! }.toTypedArray()
+        return VarMat(metrics, serieses)
+    }
+
+    override fun collectGrid(query: MetricMatcher, range: TimeFrames): GridMat {
         val serieses = metrics.values
                 .filter { query.matches(it) }
                 .mapNotNull {
@@ -65,7 +78,7 @@ class MockGateway() : Gateway, MetricRegistory {
                     }
                 }
                 .sortedBy { it.metricID }
-        return Mat.concatSeries(serieses, range, this)
+        return GridMat.concatSeries(serieses, range, this)
     }
 
     override fun metric(metricId: Long): Metric? {

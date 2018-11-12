@@ -1,6 +1,6 @@
 package epimetheus.pkg.promql
 
-import epimetheus.model.Mat
+import epimetheus.model.GridMat
 import epimetheus.model.Value
 
 data class Aggregator(
@@ -8,7 +8,7 @@ data class Aggregator(
         override val argTypes: List<ValueType> = listOf(ValueType.Matrix),
         override val returnType: ValueType = ValueType.Vector,
         override val varidaric: Int = 0,
-        val evalFn: (params: List<Value>, groups: AggregatorGroup?) -> Mat
+        val evalFn: (params: List<Value>, groups: AggregatorGroup?) -> GridMat
 ) : Applicative {
     companion object {
         val builtins = listOf(

@@ -1,6 +1,6 @@
 package epimetheus.engine
 
-import epimetheus.model.Mat
+import epimetheus.model.GridMat
 import epimetheus.model.Metric
 import epimetheus.model.Scalar
 import epimetheus.model.TestUtils.assertValueEquals
@@ -40,7 +40,7 @@ class SimpleTest {
         val tf = TimeFrames(0, 1, 1)
         val mat = interp.eval("a", tf)
         assertValueEquals(
-                Mat.of(TimeFrames(0, 1, 1), Metric.of("a") to doubleArrayOf(1.0)),
+                GridMat.of(TimeFrames(0, 1, 1), Metric.of("a") to doubleArrayOf(1.0)),
                 mat
         )
     }
@@ -87,7 +87,7 @@ class SimpleTest {
                 "a / 0" to doubleArrayOf(Double.NaN, Double.NaN, Double.NaN)
         ).forEach { case ->
             val mat = interp.eval(case.first, tf)
-            assertValueEquals(Mat.of(tf, Metric.empty to case.second), mat, allowNonDetComparsion = true)
+            assertValueEquals(GridMat.of(tf, Metric.empty to case.second), mat, allowNonDetComparsion = true)
         }
 
     }

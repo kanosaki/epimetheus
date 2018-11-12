@@ -1,6 +1,6 @@
 package epimetheus.prometheus.api
 
-import epimetheus.model.Mat
+import epimetheus.model.GridMat
 import epimetheus.model.Scalar
 import epimetheus.model.StringValue
 import epimetheus.model.Value
@@ -45,7 +45,7 @@ object Util {
 
     fun toResult(v: Value): Result {
         return when (v) {
-            is Mat -> {
+            is GridMat -> {
                 val resultType = if (v.timestamps.size == 1) {
                     "vector"
                 } else {
