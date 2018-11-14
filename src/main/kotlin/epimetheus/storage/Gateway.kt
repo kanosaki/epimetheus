@@ -12,13 +12,12 @@ interface Gateway {
     fun pushScraped(instance: String, ts: Long, mets: Collection<ScrapedSample>)
     fun collectGrid(query: MetricMatcher, range: TimeFrames): GridMat
     fun collectSeries(query: MetricMatcher, range: TimeFrames): VarMat
-    val metricRegistry: MetricRegistory
 }
 
 class IgniteGateway(private val ignite: Ignite) : Gateway {
     val fresh = Fresh(ignite)
     val aged = Aged(ignite)
-    override val metricRegistry = IgniteMeta(ignite)
+    val metricRegistry = IgniteMeta(ignite)
 
     override fun pushScraped(instance: String, ts: Long, mets: Collection<ScrapedSample>) {
         metricRegistry.registerMetricsFromSamples(mets)

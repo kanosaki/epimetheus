@@ -5,9 +5,6 @@ import epimetheus.pkg.textparse.ScrapedSample
 import java.util.*
 
 class MockGateway() : Gateway, MetricRegistory {
-    override val metricRegistry: MetricRegistory
-        get() = this
-
     //  NOTE: sortedmap sorts samples by ASC order
     // (timestamp, metricID) -> ScrapedSample
     val datum = mutableMapOf<Signature, SortedMap<Long, Double>>()
