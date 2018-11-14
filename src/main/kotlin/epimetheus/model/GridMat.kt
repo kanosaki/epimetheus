@@ -139,7 +139,7 @@ data class WindowedMat(val windowSize: Long, val mat: Mat, val scope: TimeFrames
                 val mets = m.metrics.map(metricMapper).toTypedArray()
                 VarMat(mets, m.series.mapIndexed { index, it ->
                     val folded = arrayFold(it.timestamps.toList(), it.values, fn)
-                    Series(mets[index].fingerprint(), folded.first, folded.second)
+                    Series(mets[index], folded.first, folded.second)
                 })
             }
             else -> throw RuntimeException("fold is not supported for ${m.javaClass}")
@@ -260,8 +260,8 @@ data class GridMat(val metrics: Array<Metric>, val timestamps: List<Long>, val v
         /**
          * Simply joins series
          */
-        fun concatSeries(series: List<Series>, frames: List<Long>, metreg: MetricRegistory): GridMat {
-            val metrics = Array(series.size) { metreg.mustMetric(series[it].metricID) }
+        fun concatSeries(series: List<Series>, frames: List<Long>): GridMat {
+            val metrics = Array(series.size) { series[it].metric }
             val values = series.map { it.values }
             return GridMat(metrics, frames, values)
         }
@@ -318,7 +318,7 @@ class MatrixColumnIterator(val gridMat: GridMat) : Iterator<MatCol> {
     }
 }
 
-data class Series(val metricID: Long, val values: DoubleArray, val timestamps: LongArray) : Value {
+data class Series(val metric: Metric, val values: DoubleArray, val timestamps: LongArray) : Value {
     fun compareValues(other: Series): Boolean {
         if (this === other) return true
 
@@ -332,25 +332,6 @@ data class Series(val metricID: Long, val values: DoubleArray, val timestamps: L
         return SeriesIterator(this)
     }
 
-    override fun equals(other: Any?): Boolean {
-        if (this === other) return true
-        if (javaClass != other?.javaClass) return false
-
-        other as Series
-
-        if (metricID != other.metricID) return false
-        if (!Arrays.equals(values, other.values)) return false
-        if (!Arrays.equals(timestamps, other.timestamps)) return false
-
-        return true
-    }
-
-    override fun hashCode(): Int {
-        var result = metricID.hashCode()
-        result = 31 * result + Arrays.hashCode(values)
-        result = 31 * result + Arrays.hashCode(timestamps)
-        return result
-    }
 
     class SeriesIterator(val ser: Series) {
         private var index = 0

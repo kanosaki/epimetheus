@@ -32,6 +32,6 @@ class IgniteGateway(private val ignite: Ignite) : Gateway {
     // metric_name{label1=~"pat"}
     override fun collectGrid(query: MetricMatcher, range: TimeFrames): GridMat {
         val mets = metricRegistry.lookupMetrics(query)
-        return GridMat.concatSeries(mets.map { fresh.collect(it, range) }, range, metricRegistry) // TODO: parallelize
+        return GridMat.concatSeries(mets.map { fresh.collect(it, range) }, range) // TODO: parallelize
     }
 }

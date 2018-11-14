@@ -42,7 +42,6 @@ class Fresh(val ignite: Ignite) {
     fun collect(metric: Metric, range: TimeFrames): Series {
         val instance = metric.m[Metric.instanceLabel]
         val metricID = metric.fingerprint()
-        val all = freshCache.size()
         val cur = if (instance == null) {
             // without instance field (query will be executed all nodes in the cluster)
             val query = "SELECT * FROM FreshSample WHERE metricID = ? AND ? <= timestamp AND timestamp < ? ORDER BY timestamp DESC"
@@ -61,6 +60,6 @@ class Fresh(val ignite: Ignite) {
         }
         val timestamps = LongArray(cur.size) { cur[it].key.timestamp }
         val values = DoubleArray(cur.size) { cur[it].value.value }
-        return Series(metricID, values, timestamps)
+        return Series(metric, values, timestamps)
     }
 }

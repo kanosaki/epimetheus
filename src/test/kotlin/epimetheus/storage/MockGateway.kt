@@ -27,12 +27,11 @@ class MockGateway() : Gateway, MetricRegistory {
         val serieses = metrics.values
                 .filter { query.matches(it) }
                 .map {
-                    val sig = it.fingerprint()
-                    val wholeData = datum[sig]!!
-                    Series(sig, wholeData.values.toDoubleArray(), wholeData.keys.toLongArray())
+                    val wholeData = datum[it.fingerprint()]!!
+                    Series(it, wholeData.values.toDoubleArray(), wholeData.keys.toLongArray())
                 }
-                .sortedBy { it.metricID }
-        val metrics= serieses.map { metrics[it.metricID]!! }.toTypedArray()
+                .sortedBy { it.metric.fingerprint() }
+        val metrics= serieses.map {it.metric }.toTypedArray()
         return VarMat(metrics, serieses)
     }
 
@@ -72,13 +71,13 @@ class MockGateway() : Gateway, MetricRegistory {
                         }
                     }
                     if (values.all { it != Mat.StaleValue }) {
-                        Series(sig, values, range.toLongArray())
+                        Series(it, values, range.toLongArray())
                     } else {
                         null
                     }
                 }
-                .sortedBy { it.metricID }
-        return GridMat.concatSeries(serieses, range, this)
+                .sortedBy { it.metric.fingerprint() }
+        return GridMat.concatSeries(serieses, range)
     }
 
     override fun metric(metricId: Long): Metric? {
