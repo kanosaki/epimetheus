@@ -1,6 +1,9 @@
 package epimetheus.storage
 
-import epimetheus.model.*
+import epimetheus.model.GridMat
+import epimetheus.model.MetricMatcher
+import epimetheus.model.RangeGridMat
+import epimetheus.model.TimeFrames
 import epimetheus.pkg.textparse.ScrapedSample
 import org.apache.ignite.Ignite
 
@@ -9,6 +12,7 @@ interface Gateway {
     companion object {
         val StaleSearchMilliseconds = 5 * 60 * 1000
     }
+
     fun pushScraped(instance: String, ts: Long, mets: Collection<ScrapedSample>)
 
     fun collectInstant(query: MetricMatcher, range: TimeFrames): GridMat
@@ -30,12 +34,14 @@ class IgniteGateway(private val ignite: Ignite) : Gateway {
     }
 
     override fun collectRange(query: MetricMatcher, frames: TimeFrames, range: Long, offset: Long): RangeGridMat {
-        TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
+        val mets = metricRegistry.lookupMetrics(query)
+        val vals = mets.map { fresh.collectRange(it, frames, range, offset) }
+        return RangeGridMat(mets, frames, range, vals)
     }
 
     // metric_name{label1=~"pat"}
     override fun collectInstant(query: MetricMatcher, range: TimeFrames): GridMat {
         val mets = metricRegistry.lookupMetrics(query)
-        return GridMat.concatSeries(mets.map { fresh.collect(it, range) }, range) // TODO: parallelize
+        return GridMat.concatSeries(mets.map { fresh.collectInstant(it, range) }, range) // TODO: parallelize
     }
 }

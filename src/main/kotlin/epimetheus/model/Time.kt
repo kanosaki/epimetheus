@@ -9,6 +9,12 @@ data class TimeRange(val from: Long, val to: Long) {
 
 // start == end --> instant selector
 data class TimeFrames(val start: Long, val end: Long, val step: Long) : List<Long> {
+    companion object {
+        fun instant(ts: Long): TimeFrames {
+            return TimeFrames(ts, ts, 1)
+        }
+    }
+
     init {
         assert(start <= end)
         if (start != end) {
@@ -70,14 +76,14 @@ data class TimeFrames(val start: Long, val end: Long, val step: Long) : List<Lon
     }
 
     override val size: Int
-        get() = ((end - start) / step).toInt()
+        get() = ((end - start) / step).toInt() + 1
 
     override fun contains(element: Long): Boolean {
-        return element in start..(end - 1) && (element - start) % step == 0L
+        return element in start..end && (element - start) % step == 0L
     }
 
     fun includes(element: Long): Boolean {
-        return element in start..(end - 1)
+        return element in start..end
     }
 
     override fun containsAll(elements: Collection<Long>): Boolean {

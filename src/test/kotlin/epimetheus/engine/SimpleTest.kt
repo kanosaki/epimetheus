@@ -35,12 +35,12 @@ class SimpleTest {
     fun evalSinglePoint() {
         val mg = MockGateway()
         mg.pushScraped("", 0, listOf(ScrapedSample.create("a", 1.0)))
-        mg.pushScraped("", 1, listOf(ScrapedSample.create("a", 1.0)))
+        mg.pushScraped("", 1, listOf(ScrapedSample.create("a", 2.0)))
         val interp = Interpreter(mg)
-        val tf = TimeFrames(0, 1, 1)
+        val tf = TimeFrames.instant(0)
         val mat = interp.eval("a", tf)
         assertValueEquals(
-                GridMat.of(TimeFrames(0, 1, 1), Metric.of("a") to doubleArrayOf(1.0)),
+                GridMat.of(TimeFrames.instant(0), Metric.of("a") to doubleArrayOf(1.0)),
                 mat
         )
     }
@@ -48,7 +48,7 @@ class SimpleTest {
     @Test
     fun evalBinOp() {
         val interp = Interpreter(MockGateway())
-        val tf = TimeFrames(0, 2, 1)
+        val tf = TimeFrames.instant(0)
         listOf(
                 "1 + (1 + 2)" to Scalar(4.0),
                 "2 + 3 * 2" to Scalar(8.0),
@@ -82,20 +82,20 @@ class SimpleTest {
                 ScrapedSample.create("z", 0.0)
         ))
         val interp = Interpreter(mg)
-        val tf = TimeFrames(0, 3, 1)
+        val tf = TimeFrames(0, 2, 1)
         listOf(
-                "a - 2" to doubleArrayOf(1.0, 0.0, -1.0),
-                "2 - a" to doubleArrayOf(-1.0, 0.0, 1.0),
-                "a * 2" to doubleArrayOf(6.0, 4.0, 2.0),
-                "2 * a" to doubleArrayOf(6.0, 4.0, 2.0),
-                "b * a" to doubleArrayOf(15.0, 8.0, 3.0),
-                "a + b + 1" to doubleArrayOf(9.0, 7.0, 5.0),
+                "a - 2" to doubleArrayOf(-1.0, 0.0, 1.0),
+                "2 - a" to doubleArrayOf(1.0, 0.0, -1.0),
+                "a * 2" to doubleArrayOf(2.0, 4.0, 6.0),
+                "2 * a" to doubleArrayOf(2.0, 4.0, 6.0),
+                "b * a" to doubleArrayOf(3.0, 8.0, 15.0),
+                "a + b + 1" to doubleArrayOf(5.0, 7.0, 9.0),
                 "a / 0" to doubleArrayOf(Double.POSITIVE_INFINITY, Double.POSITIVE_INFINITY, Double.POSITIVE_INFINITY),  // positive number / 0.0 --> +Inf in prometheus
                 "c / 0" to doubleArrayOf(Double.NEGATIVE_INFINITY, Double.NEGATIVE_INFINITY, Double.NEGATIVE_INFINITY),  // positive number / 0.0 --> +Inf in prometheus
                 "z / 0" to doubleArrayOf(Double.NaN, Double.NaN, Double.NaN)  // positive number / 0.0 --> +Inf in prometheus
-        ).forEach { case ->
+        ).forEachIndexed { index, case ->
             val mat = interp.eval(case.first, tf)
-            assertValueEquals(GridMat.of(tf, Metric.empty to case.second), mat, allowNonDetComparsion = true)
+            assertValueEquals(GridMat.of(tf, Metric.empty to case.second), mat, allowNonDetComparsion = true, msg = "failed at case $index")
         }
 
     }

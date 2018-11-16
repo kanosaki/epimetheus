@@ -57,9 +57,6 @@ open class Metric(val m: SortedMap<String, String>) {
         if (other === null) {
             return false
         }
-        if (other === literal) {
-            return false
-        }
         val o = other as? Metric ?: return false
         if (o.m.size != this.m.size) {
             return false
@@ -79,16 +76,6 @@ open class Metric(val m: SortedMap<String, String>) {
         val instanceLabel = "instance"
 
         val empty = Metric(sortedMapOf())
-
-        val literal = object : Metric(sortedMapOf()) {
-            override fun equals(other: Any?): Boolean {
-                return other === this
-            }
-
-            override fun toString(): String {
-                return "{Literal}"
-            }
-        }
 
         val factory = XXHashFactory.fastestInstance()
 

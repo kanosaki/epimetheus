@@ -104,77 +104,9 @@ data class RangeGridMat(val metrics: List<Metric>, val timestamps: List<Long>, v
         }
         return GridMat(metrics.toTypedArray(), timestamps, values)
     }
-}
 
-data class WindowedMat(val windowSize: Long, val mat: Mat, val scope: TimeFrames) : Value {
-    private fun arrayFold(timestamps: List<Long>, ary: DoubleArray, fn: (DoubleArray, Int, Int) -> Double): Pair<DoubleArray, LongArray> {
-        assert(timestamps.size == ary.size)
-        assert(ary.isNotEmpty())
-        // TODO: timestamp MUST BE ASCENDING
-
-        //  array   | --------- | --------- | -------- | -------- | -------- | -------- | -------- | -------- |
-        //  scope(ts)                | ------------------------------------------------------------------- |
-        //  windowSize (ts)                     | ------------------------------------------------ |
-        //  to                                                                            <- - - - |
-        //  from                     +    <- - - - - - |
-        //      timestamps[fromIdx-1] > timestamps[toIdx] - windowSize
-
-        var toIdx = ary.size - 1
-        // heading toIdx
-        while (toIdx >= 0 && !scope.includes(timestamps[toIdx])) {
-            toIdx--
-        }
-        val initialToIdx = toIdx
-        assert(toIdx > 0)
-        var fromIdx = toIdx
-        val valBuf = DoubleArray(toIdx + 1)
-        val tsBuf = LongArray(toIdx + 1)
-        while (fromIdx >= 0 && scope.includes(timestamps[fromIdx]) && toIdx >= 0 && scope.includes(timestamps[toIdx])) {
-            // seek fromIdx
-            while (fromIdx > 0 && timestamps[fromIdx - 1] >= timestamps[toIdx] - windowSize) {
-                fromIdx--
-            }
-            valBuf[toIdx] = fn(ary, fromIdx, toIdx)
-            tsBuf[toIdx] = timestamps[toIdx]
-            toIdx-- // proceed (to backward)
-        }
-        return Arrays.copyOfRange(valBuf, toIdx + 1/*rollback last ++*/, initialToIdx + 1/* 3rd param of copyOfRange is exclusive*/) to
-                Arrays.copyOfRange(tsBuf, toIdx + 1, initialToIdx + 1)
-    }
-
-    fun fold(fn: (DoubleArray, Int, Int) -> Double, metricMapper: (Metric) -> Metric): Mat {
-        val m = mat
-        return when (m) {
-            is GridMat -> {
-                if (m.values.isEmpty()) return GridMat(arrayOf(), listOf(), listOf()) // TODO: empty?
-                val folded = m.values.map { arrayFold(m.timestamps, it, fn) }
-                GridMat(m.metrics.map(metricMapper).toTypedArray(), folded[0].second.toList(), folded.map { it.first })
-            }
-            is RangeVector -> {
-                val mets = m.series.map { metricMapper(it.metric) }
-                RangeVector(m.series.mapIndexed { index, it ->
-                    val folded = arrayFold(it.timestamps.toList(), it.values, fn)
-                    Series(mets[index], folded.first, folded.second)
-                })
-            }
-            else -> throw RuntimeException("fold is not supported for ${m.javaClass}")
-        }
-    }
-}
-
-data class RangeVector(val series: List<Series>) : Mat {
-    fun asInstant(): GridMat? {
-        if (series.isEmpty()) {
-            return GridMat(arrayOf(), listOf(), listOf()) // TODO: empty object?
-        }
-        if (series.any { it.values.size != 1 }) {
-            return null
-        }
-        val sampleTs = series[0].timestamps[0]
-        if (series.any { it.timestamps[0] != sampleTs }) {
-            return null
-        }
-        return Mat.instant(series.map { it.metric }.toTypedArray(), sampleTs, series.map { it.values[0] })
+    override fun toString(): String {
+        return "<RangeGridMat metrics=$metrics timestamps=$timestamps windowSize=$windowSize series=${series.map { s -> s.map { p -> "${p.first.toList()} ${p.second.toList()}" } }}"
     }
 }
 
@@ -315,34 +247,4 @@ class MatrixColumnIterator(val gridMat: GridMat) : Iterator<MatCol> {
 }
 
 data class Series(val metric: Metric, val values: DoubleArray, val timestamps: LongArray) : Value {
-    fun compareValues(other: Series): Boolean {
-        if (this === other) return true
-
-        if (!Arrays.equals(values, other.values)) return false
-        if (!Arrays.equals(timestamps, other.timestamps)) return false
-
-        return true
-    }
-
-    fun iter(): SeriesIterator {
-        return SeriesIterator(this)
-    }
-
-
-    class SeriesIterator(val ser: Series) {
-        private var index = 0
-
-        fun next(): Boolean {
-            index++
-            return index < ser.values.size
-        }
-
-        fun value(): Double {
-            return ser.values[index]
-        }
-
-        fun timestamp(): ETime {
-            return ser.timestamps[index]
-        }
-    }
 }

@@ -157,7 +157,7 @@ class PromSpec(val lines: List<String>) : Executable {
     data class EvalCmd(val expr: Expression, val offset: Duration?, val ordered: Boolean, val fail: Boolean, val specs: List<Spec>) : SpecCmd() {
         override fun eval(ctx: SpecContext) {
             val tf = if (offset != null) {
-                TimeFrames(offset.toMillis(), offset.toMillis() + 1, 1) // TODO: define instant selector
+                TimeFrames.instant(offset.toMillis())
             } else {
                 throw RuntimeException("offset required")
             }
@@ -187,7 +187,6 @@ class PromSpec(val lines: List<String>) : Executable {
                 when (result) {
                     is GridMat -> println(result.toTable().printAll())
                     is Scalar -> println("SCALAR ${result.value}")
-                    is RangeVector -> println(result)
                     else -> println("UNKNOWN Value type: ${result.javaClass}: $result")
                 }
                 throw e

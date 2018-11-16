@@ -56,6 +56,7 @@ dependencies {
     compile "com.fasterxml.jackson.core:jackson-databind:$jacksonVersion"
     compile "com.fasterxml.jackson.module:jackson-module-kotlin:$jacksonVersion"
     compile "com.fasterxml.jackson.dataformat:jackson-dataformat-yaml:$jacksonVersion"
+    compile 'it.unimi.dsi:fastutil:8.2.+'
     compile 'tech.tablesaw:tablesaw-core:0.25.2'
     compile "io.vertx:vertx-core:$vertxVersion"
     compile "io.vertx:vertx-ignite:$vertxVersion"

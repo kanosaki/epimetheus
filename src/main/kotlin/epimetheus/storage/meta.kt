@@ -20,7 +20,7 @@ interface Meta : MetricRegistory {
     /**
      * Collects metrics with query, result must be sorted by its fingerprint
      */
-    fun lookupMetrics(query: MetricMatcher): Collection<Metric>
+    fun lookupMetrics(query: MetricMatcher): List<Metric>
 
     fun metricIDs(query: MetricMatcher): List<Signature> {
         return lookupMetrics(query).map { it.fingerprint() }
@@ -46,7 +46,7 @@ class IgniteMeta(val ignite: Ignite) : Meta {
         return metricMeta.get(id)?.metric
     }
 
-    override fun lookupMetrics(query: MetricMatcher): Collection<Metric> {
+    override fun lookupMetrics(query: MetricMatcher): List<Metric> {
         val name = query.namePattern()
         return if (name == null || name.lmt != LabelMatchType.Eq) {
             val mets = metricMeta

@@ -1,7 +1,9 @@
 package epimetheus.storage
 
+import epimetheus.CacheName
 import epimetheus.model.*
 import epimetheus.model.TestUtils.assertMatEquals
+import epimetheus.model.TestUtils.assertRangeMatEquals
 import epimetheus.pkg.textparse.ScrapedSample
 import org.apache.ignite.Ignite
 import org.apache.ignite.Ignition
@@ -17,6 +19,14 @@ class TestStorageIgnite {
     fun setUp() {
         val conf = this.javaClass.getResource("/dev-config.xml")
         ignite = Ignition.start(conf)
+    }
+
+    @BeforeEach
+    fun clearCache() {
+        ignite.destroyCache(CacheName.Prometheus.FRESH_SAMPLES)
+        ignite.destroyCache(CacheName.Prometheus.METRIC_META)
+        ignite.destroyCache(CacheName.Prometheus.SCRAPE_STATUSES)
+        ignite.destroyCache(CacheName.Prometheus.SCRAPE_TARGETS)
     }
 
     @AfterAll
@@ -91,20 +101,42 @@ class TestStorageIgnite {
     }
 
     @Test
-    fun testPutGetIgnite() {
-        TestGateway().execPutGet(IgniteGateway(ignite))
+    fun testPutGetInstant() {
+        GatewayTest.execTestInstant(IgniteGateway(ignite))
+    }
+
+    @Test
+    fun testPutGetRange() {
+        GatewayTest.execTestRange(IgniteGateway(ignite))
+    }
+
+    @Test
+    fun testInstantStale() {
+        GatewayTest.execTestInstantStale(IgniteGateway(ignite))
     }
 }
 
 class TestGateway {
     @Test
-    fun testPutGetMock() {
-        execPutGet(MockGateway())
+    fun testPutGetInstant() {
+        GatewayTest.execTestInstant(MockGateway())
     }
 
-    fun execPutGet(storage: Gateway) {
+    @Test
+    fun testPutGetRange() {
+        GatewayTest.execTestRange(MockGateway())
+    }
+
+    @Test
+    fun testInstantStale() {
+        GatewayTest.execTestInstantStale(MockGateway())
+    }
+}
+
+object GatewayTest {
+    fun execTestInstant(storage: Gateway) {
         for (instance in listOf("a:123", "b:234", "c:345")) {
-            for (ts in 0 until 10) {
+            for (ts in 0 until 100 step 10) {
                 val samples = listOf("xx", "xy", "zz")
                         .map { ScrapedSample.create(it, 1.0, "instance" to instance) }
                 // record correct data
@@ -116,8 +148,8 @@ class TestGateway {
             return Metric(sortedMapOf("__name__" to name, "instance" to instance))
         }
 
-        val actual = storage.collectInstant(MetricMatcher.nameMatch("x.*", true), TimeFrames(0, 3, 1))
-        val expected = GridMat.of(TimeFrames(0, 3, 1),
+        val actual = storage.collectInstant(MetricMatcher.nameMatch("x.*", true), TimeFrames(5, 25, 10))
+        val expected = GridMat.of(TimeFrames(5, 25, 10),
                 met("xx", "a:123") to doubleArrayOf(1.0, 1.0, 1.0),
                 met("xy", "a:123") to doubleArrayOf(1.0, 1.0, 1.0),
 
@@ -129,4 +161,77 @@ class TestGateway {
         )
         assertMatEquals(expected, actual)
     }
+
+    /**
+     * Tests basic collectRange behavior. It will be collected that all values near by each grid points within specified time window.
+     */
+    fun execTestRange(storage: Gateway) {
+        for (ts in 0..60 step 10) {
+            storage.pushScraped("a:123", ts.toLong(), listOf(ScrapedSample.create("xx", 1.0, "instance" to "a:123")))
+        }
+
+        for (ts in 0..60 step 15) {
+            storage.pushScraped("a:123", ts.toLong(), listOf(ScrapedSample.create("xy", 1.0, "instance" to "a:123")))
+        }
+
+        fun met(name: String, instance: String): Metric {
+            return Metric(sortedMapOf("__name__" to name, "instance" to instance))
+        }
+
+        val tf = TimeFrames(20, 60, 20)
+        val windowSize = 30L
+        val actual = storage.collectRange(MetricMatcher.nameMatch("x.*", true), tf, windowSize, 0)
+        val expected = RangeGridMat(listOf(met("xy", "a:123"), met("xx", "a:123")), tf, windowSize,
+                listOf(
+                        listOf(
+                                longArrayOf(0, 15) to doubleArrayOf(1.0, 1.0),
+                                longArrayOf(15, 30) to doubleArrayOf(1.0, 1.0),
+                                longArrayOf(30, 45, 60) to doubleArrayOf(1.0, 1.0, 1.0)
+                        ),
+                        listOf(
+                                longArrayOf(0, 10, 20) to doubleArrayOf(1.0, 1.0, 1.0),
+                                longArrayOf(10, 20, 30, 40) to doubleArrayOf(1.0, 1.0, 1.0, 1.0),
+                                longArrayOf(30, 40, 50, 60) to doubleArrayOf(1.0, 1.0, 1.0, 1.0)
+                        )
+                )
+        )
+        assertRangeMatEquals(expected, actual)
+    }
+
+    /**
+     * At Gateway.collectInstant, values near by each grid points within 5 minutes will adopted.
+     */
+    fun execTestInstantStale(storage: Gateway) {
+        storage.pushScraped("a:123", 0 * 60 * 1000, listOf(ScrapedSample.create("xx", 1.0, "instance" to "a:123")))
+        storage.pushScraped("a:123", 1 * 60 * 1000, listOf(ScrapedSample.create("xy", 1.0, "instance" to "a:123")))
+
+        fun met(name: String, instance: String): Metric {
+            return Metric(sortedMapOf("__name__" to name, "instance" to instance))
+        }
+
+        listOf(
+                TimeFrames.instant(1 * 60 * 1000) to
+                        arrayOf(
+                                met("xx", "a:123") to doubleArrayOf(1.0),
+                                met("xy", "a:123") to doubleArrayOf(1.0)
+                        ),
+                TimeFrames.instant(5 * 60 * 1000) to
+                        arrayOf(
+                                met("xx", "a:123") to doubleArrayOf(1.0),
+                                met("xy", "a:123") to doubleArrayOf(1.0)
+                        ),
+                TimeFrames.instant(5 * 60 * 1000 + 1) to
+                        arrayOf(
+                                met("xy", "a:123") to doubleArrayOf(1.0)
+                        ),
+                TimeFrames.instant(6 * 60 * 1000 + 1) to
+                        arrayOf()
+        ).forEachIndexed { index, pair ->
+            val actual = storage.collectInstant(MetricMatcher.nameMatch("x.*", true), pair.first).prune()
+            val expected = GridMat.of(pair.first, *pair.second)
+            assertMatEquals(expected, actual, memo = "at index = $index")
+        }
+    }
+
 }
+
