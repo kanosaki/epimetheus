@@ -16,7 +16,7 @@ interface SpecValue {
 
 data class VNumber(val initial: Double, val delta: Double, override val repeat: Int) : SpecValue {
     override fun expand(currentValue: Double?): List<Double?> {
-        return List(repeat) { initial }
+        return List(repeat) { initial + it * delta }
     }
 }
 
