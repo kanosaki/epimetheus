@@ -7,8 +7,8 @@ object TestUtils {
     const val DOUBLE_COMPARE_DELTA = 10e-9
 
     fun assertValueEquals(m1: Value, m2: Value, allowNonDetComparsion: Boolean = false, prune: Boolean = false) {
-        val gm1 = (m1 as? GridMat) ?: (m1 as? VarMat)?.asInstant()
-        val gm2 = (m2 as? GridMat) ?: (m2 as? VarMat)?.asInstant()
+        val gm1 = (m1 as? GridMat) ?: (m1 as? RangeVector)?.asInstant()
+        val gm2 = (m2 as? GridMat) ?: (m2 as? RangeVector)?.asInstant()
         if (gm1 != null && gm2 != null) {
             return if (prune) {
                 assertMatEquals(gm1.prune(), gm2.prune(), allowNonDetComparsion)

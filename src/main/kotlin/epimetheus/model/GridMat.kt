@@ -91,6 +91,21 @@ interface Mat : Value {
     }
 }
 
+data class RangeGridMat(val metrics: List<Metric>, val timestamps: List<Long>, val windowSize: Long, val series: List<List<Pair<LongArray, DoubleArray>>>): Mat {
+    fun applyUnifyFn(fn: (Metric, LongArray, DoubleArray) -> Double): GridMat {
+        val values = mutableListOf<DoubleArray>()
+        for (mIdx in 0 until metrics.size) {
+            val m = metrics[mIdx]
+            val ary = DoubleArray(timestamps.size) { tIdx ->
+                val pair = series[mIdx][tIdx]
+                fn(m, pair.first, pair.second)
+            }
+            values += ary
+        }
+        return GridMat(metrics.toTypedArray(), timestamps, values)
+    }
+}
+
 data class WindowedMat(val windowSize: Long, val mat: Mat, val scope: TimeFrames) : Value {
     private fun arrayFold(timestamps: List<Long>, ary: DoubleArray, fn: (DoubleArray, Int, Int) -> Double): Pair<DoubleArray, LongArray> {
         assert(timestamps.size == ary.size)
@@ -135,9 +150,9 @@ data class WindowedMat(val windowSize: Long, val mat: Mat, val scope: TimeFrames
                 val folded = m.values.map { arrayFold(m.timestamps, it, fn) }
                 GridMat(m.metrics.map(metricMapper).toTypedArray(), folded[0].second.toList(), folded.map { it.first })
             }
-            is VarMat -> {
-                val mets = m.metrics.map(metricMapper).toTypedArray()
-                VarMat(mets, m.series.mapIndexed { index, it ->
+            is RangeVector -> {
+                val mets = m.series.map { metricMapper(it.metric) }
+                RangeVector(m.series.mapIndexed { index, it ->
                     val folded = arrayFold(it.timestamps.toList(), it.values, fn)
                     Series(mets[index], folded.first, folded.second)
                 })
@@ -147,25 +162,7 @@ data class WindowedMat(val windowSize: Long, val mat: Mat, val scope: TimeFrames
     }
 }
 
-data class VarMat(val metrics: Array<Metric>, val series: List<Series>) : Mat {
-    override fun equals(other: Any?): Boolean {
-        if (this === other) return true
-        if (javaClass != other?.javaClass) return false
-
-        other as VarMat
-
-        if (!metrics.contentEquals(other.metrics)) return false
-        if (series != other.series) return false
-
-        return true
-    }
-
-    override fun hashCode(): Int {
-        var result = metrics.contentHashCode()
-        result = 31 * result + series.hashCode()
-        return result
-    }
-
+data class RangeVector(val series: List<Series>) : Mat {
     fun asInstant(): GridMat? {
         if (series.isEmpty()) {
             return GridMat(arrayOf(), listOf(), listOf()) // TODO: empty object?
@@ -177,12 +174,7 @@ data class VarMat(val metrics: Array<Metric>, val series: List<Series>) : Mat {
         if (series.any { it.timestamps[0] != sampleTs }) {
             return null
         }
-        return Mat.instant(metrics, sampleTs, series.map { it.values[0] })
-    }
-
-    fun justify(tf: TimeFrames): GridMat {
-        // temporary implement
-        TODO()
+        return Mat.instant(series.map { it.metric }.toTypedArray(), sampleTs, series.map { it.values[0] })
     }
 }
 
@@ -190,6 +182,10 @@ data class GridMat(val metrics: Array<Metric>, val timestamps: List<Long>, val v
     init {
         assert(values.size == metrics.size)
         assert(values.all { it.size == timestamps.size }) { "timestamps.size: ${timestamps.size}, values sizes: ${values.map { it.size }}" }
+    }
+
+    fun dropMetricName(): GridMat {
+        return GridMat(metrics.map { it.filter(listOf(), listOf(Metric.nameLabel)) }.toTypedArray(), timestamps, values)
     }
 
     override fun toString(): String {

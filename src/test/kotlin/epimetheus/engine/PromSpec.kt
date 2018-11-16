@@ -187,7 +187,7 @@ class PromSpec(val lines: List<String>) : Executable {
                 when (result) {
                     is GridMat -> println(result.toTable().printAll())
                     is Scalar -> println("SCALAR ${result.value}")
-                    is VarMat -> println(result)
+                    is RangeVector -> println(result)
                     else -> println("UNKNOWN Value type: ${result.javaClass}: $result")
                 }
                 throw e

@@ -1,22 +1,25 @@
 package epimetheus.pkg.promql
 
 import epimetheus.engine.EvalNode
+import epimetheus.model.GridMat
 import epimetheus.model.Mat
-import epimetheus.model.Metric
+import epimetheus.model.RangeGridMat
 import epimetheus.model.Value
-import epimetheus.model.WindowedMat
 
 
 data class Function(
         val name: String,
         override val argTypes: List<ValueType> = listOf(ValueType.Vector),
         override val returnType: ValueType = ValueType.Vector,
-        val noGrid: Boolean = false,
         override val varidaric: Int = 0,
         val body: (List<Value>, EvalNode) -> Value) : Applicative {
 
     fun call(params: List<Value>, node: EvalNode): Value {
-        return this.body(params, node)
+        val ret = this.body(params, node)
+        return when (ret) {
+            is GridMat -> ret.dropMetricName()
+            else -> ret
+        }
     }
 
     // TODO: UDF(User Defined Function) support?
@@ -29,32 +32,25 @@ data class Function(
                 //Function("changes", listOf(ValueType.Matrix)) { _, _ -> TODO() },
                 //Function("clamp_max", listOf(ValueType.Vector, ValueType.Scalar)) { _ -> TODO() },
                 //Function("clamp_min", listOf(ValueType.Vector, ValueType.Scalar)) { _ -> TODO() },
-                Function("count_over_time", listOf(ValueType.Matrix), noGrid = true) { args, node ->
+                Function("count_over_time", listOf(ValueType.Matrix)) { args, node ->
                     val m = args[0]
                     when (m) {
-                        //is VarMat -> {
-                        //    val values = DoubleArray(m.series.size) { i ->
-                        //        m.series[i].values.count { v -> !Mat.isStale(v) }.toDouble()
-                        //    }
-                        //    // use empty Metric, as value of 'count' is no longer metrics itself?
-                        //    Mat.instant(Array(m.metrics.size) { Metric.empty }, node.timeScope.end - 1, values.toList())
-                        //}
-                        is WindowedMat -> {
-                            m.fold({ array, begin, end ->
-                                var ctr = 0.0
-                                for (i in begin..end) { // TODO: .. or until?
-                                    if (!Mat.isStale(array[i])) {
+                        is RangeGridMat -> {
+                            m.applyUnifyFn { m, ts, vs ->
+                                var ctr = 0
+                                for (v in vs) {
+                                    if (!Mat.isStale(v)) {
                                         ctr++
                                     }
                                 }
-                                ctr
-                            }, { Metric.empty })
+                                ctr.toDouble()
+                            }
                         }
                         else -> {
                             throw PromQLException("count_over_time is not defined for type ${m.javaClass}")
                         }
                     }
-                }//,
+                },
                 //Function("days_in_month", varidaric = 1) { _ -> TODO() },
                 //Function("days_of_month", varidaric = 1) { _ -> TODO() },
                 //Function("days_of_week", varidaric = 1) { _ -> TODO() },
@@ -80,8 +76,25 @@ data class Function(
                 //Function("minute", varidaric = 1) { _ -> TODO() },
                 //Function("month", varidaric = 1) { _ -> TODO() },
                 //Function("predict_linear", listOf(ValueType.Matrix, ValueType.Scalar)) { _ -> TODO() },
-                //Function("quantile_over_time", listOf(ValueType.Scalar, ValueType.Matrix), noGrid = true) { _ -> TODO() },
-                //Function("rate", listOf(ValueType.Matrix)) { _ -> TODO() },
+                //Functin("quantile_over_time", listOf(ValueType.Scalar, ValueType.Matrix), noGrid = true) { _ -> TODO() },
+                Function("rate", listOf(ValueType.Matrix)) { args, node ->
+                    // TODO: implement correctly
+                    val m = args[0]
+                    when (m) {
+                        is RangeGridMat -> {
+                            m.applyUnifyFn { m, ts, vs ->
+                                when {
+                                    vs.isEmpty() -> Double.NaN
+                                    vs.size == 1 -> vs[0]
+                                    else -> vs.last() - vs.first()
+                                }
+                            }
+                        }
+                        else -> {
+                            throw PromQLException("rate is not defined for type ${m.javaClass}")
+                        }
+                    }
+                }
                 //Function("resets", listOf(ValueType.Matrix)) { _ -> TODO() },
                 //Function("round", listOf(ValueType.Vector, ValueType.Scalar), varidaric = 1) { _ -> TODO() },
                 //Function("scalar", returnType = ValueType.Scalar, varidaric = 1) { _ -> TODO() },

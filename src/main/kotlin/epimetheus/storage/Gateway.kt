@@ -10,8 +10,13 @@ interface Gateway {
         val StaleSearchMilliseconds = 5 * 60 * 1000
     }
     fun pushScraped(instance: String, ts: Long, mets: Collection<ScrapedSample>)
-    fun collectGrid(query: MetricMatcher, range: TimeFrames): GridMat
-    fun collectSeries(query: MetricMatcher, range: TimeFrames): VarMat
+
+    fun collectInstant(query: MetricMatcher, range: TimeFrames): GridMat
+    /**
+     * @param frames Collect upper points
+     * @param range Collecting Range by milliseconds
+     */
+    fun collectRange(query: MetricMatcher, frames: TimeFrames, range: Long, offset: Long): RangeGridMat
 }
 
 class IgniteGateway(private val ignite: Ignite) : Gateway {
@@ -24,12 +29,12 @@ class IgniteGateway(private val ignite: Ignite) : Gateway {
         fresh.push(instance, ts, mets)
     }
 
-    override fun collectSeries(query: MetricMatcher, range: TimeFrames): VarMat {
+    override fun collectRange(query: MetricMatcher, frames: TimeFrames, range: Long, offset: Long): RangeGridMat {
         TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
     }
 
     // metric_name{label1=~"pat"}
-    override fun collectGrid(query: MetricMatcher, range: TimeFrames): GridMat {
+    override fun collectInstant(query: MetricMatcher, range: TimeFrames): GridMat {
         val mets = metricRegistry.lookupMetrics(query)
         return GridMat.concatSeries(mets.map { fresh.collect(it, range) }, range) // TODO: parallelize
     }

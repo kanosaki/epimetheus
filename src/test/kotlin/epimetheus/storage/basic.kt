@@ -116,7 +116,7 @@ class TestGateway {
             return Metric(sortedMapOf("__name__" to name, "instance" to instance))
         }
 
-        val actual = storage.collectGrid(MetricMatcher.nameMatch("x.*", true), TimeFrames(0, 3, 1))
+        val actual = storage.collectInstant(MetricMatcher.nameMatch("x.*", true), TimeFrames(0, 3, 1))
         val expected = GridMat.of(TimeFrames(0, 3, 1),
                 met("xx", "a:123") to doubleArrayOf(1.0, 1.0, 1.0),
                 met("xy", "a:123") to doubleArrayOf(1.0, 1.0, 1.0),

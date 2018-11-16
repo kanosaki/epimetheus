@@ -47,7 +47,7 @@ class Bootstrap(val config: Config, val ignite: Ignite) {
             Thread.sleep(2000)
 //            val now = Instant.now()
 //            val range = TimeRange(Timestamp.from(now.minusSeconds(30)), Timestamp.from(now))
-//            sg.collectGrid(Query("node_cpu", mapOf()), range)
+//            sg.collectInstant(Query("node_cpu", mapOf()), range)
         }
     }
 
