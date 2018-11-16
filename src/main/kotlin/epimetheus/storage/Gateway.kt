@@ -6,6 +6,7 @@ import epimetheus.model.RangeGridMat
 import epimetheus.model.TimeFrames
 import epimetheus.pkg.textparse.ScrapedSample
 import org.apache.ignite.Ignite
+import kotlin.streams.toList
 
 
 interface Gateway {
@@ -35,13 +36,14 @@ class IgniteGateway(private val ignite: Ignite) : Gateway {
 
     override fun collectRange(query: MetricMatcher, frames: TimeFrames, range: Long, offset: Long): RangeGridMat {
         val mets = metricRegistry.lookupMetrics(query)
-        val vals = mets.map { fresh.collectRange(it, frames, range, offset) }
-        return RangeGridMat(mets, frames, range, vals)
+        val vals = mets.parallelStream().map { fresh.collectRange(it, frames, range, offset) }
+        return RangeGridMat(mets, frames, range, vals.toList())
     }
 
     // metric_name{label1=~"pat"}
     override fun collectInstant(query: MetricMatcher, range: TimeFrames): GridMat {
         val mets = metricRegistry.lookupMetrics(query)
-        return GridMat.concatSeries(mets.map { fresh.collectInstant(it, range) }, range) // TODO: parallelize
+        val vals = mets.parallelStream().map { fresh.collectInstant(it, range) }
+        return GridMat.concatSeries(vals.toList(), range)
     }
 }
