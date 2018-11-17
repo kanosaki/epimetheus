@@ -91,7 +91,7 @@ interface Mat : Value {
     }
 }
 
-data class RangeGridMat(val metrics: List<Metric>, val timestamps: List<Long>, val windowSize: Long, val series: List<List<Pair<LongArray, DoubleArray>>>): Mat {
+data class RangeGridMat(val metrics: List<Metric>, val timestamps: List<Long>, val windowSize: Long, val series: List<List<Pair<LongArray, DoubleArray>>>) : Mat {
     fun applyUnifyFn(fn: (Metric, LongArray, DoubleArray) -> Double): GridMat {
         val values = mutableListOf<DoubleArray>()
         for (mIdx in 0 until metrics.size) {
@@ -125,11 +125,23 @@ data class GridMat(val metrics: Array<Metric>, val timestamps: List<Long>, val v
     }
 
     fun toTable(tableName: String = ""): Table {
+        val usedNames = mutableSetOf<String>()
+        fun mkUniqueName(n: String): String {
+            var name = n
+            var ctr = 1
+            while (usedNames.contains(name)) {
+                name = "$n$ctr"
+                ctr++
+            }
+            usedNames += name
+            return name
+        }
+
         val cols = Array<Column<*>>(metrics.size + 1) { i ->
             if (i == 0) {
-                StringColumn.create("ts", timestamps.map { it.toString() })
+                StringColumn.create(mkUniqueName("ts"), timestamps.map { it.toString() })
             } else {
-                StringColumn.create(metrics[i - 1].toString(), values[i - 1].map { Mat.formatValue(it) })
+                StringColumn.create(mkUniqueName(metrics[i - 1].toString()), values[i - 1].map { Mat.formatValue(it) })
             }
         }
         return Table.create(tableName, *cols)
