@@ -113,7 +113,7 @@ class EdenPageStore(val ignite: Ignite, val windowSize: Long = 5 * 60 * 1000) : 
         }
     }
 
-    fun collectInstant(metric: Metric, range: TimeFrames): Series {
+    fun collectInstant(metric: Metric, range: TimeFrames, offset: Long): Series {
         val instance = metric.m[Metric.instanceLabel] ?: ""
         val metricID = metric.fingerprint()
         val collectingKeys = mutableSetOf<EdenPageKey>()
@@ -129,7 +129,8 @@ class EdenPageStore(val ignite: Ignite, val windowSize: Long = 5 * 60 * 1000) : 
             }
         }
         val values = DoubleArray(range.size) {
-            val t = range[it]
+            val originalTs = range[it]
+            val t = originalTs - offset
             val subMap = m.headMap(t + 1)
             if (subMap.isEmpty()) {
                 Mat.StaleValue

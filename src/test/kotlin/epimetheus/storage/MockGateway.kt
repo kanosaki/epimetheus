@@ -25,7 +25,7 @@ class MockGateway() : Gateway, MetricRegistory {
         val values = mets.map { m ->
             val wholeData = datum[m.fingerprint()]!!
             frames.map { f ->
-                val blocks = wholeData.filterKeys { k -> (f - range) <= k && k <= f }.toList()
+                val blocks = wholeData.filterKeys { k -> (f - range - offset) <= k && k <= (f - offset) }.toList()
                 val r = blocks.map { it.first }.toLongArray() to blocks.map { it.second }.toDoubleArray()
                 r
             }
@@ -33,13 +33,14 @@ class MockGateway() : Gateway, MetricRegistory {
         return RangeGridMat(mets, frames, range, values)
     }
 
-    override fun collectInstant(query: MetricMatcher, range: TimeFrames): GridMat {
+    override fun collectInstant(query: MetricMatcher, range: TimeFrames, offset: Long): GridMat {
         val serieses = metrics.values
                 .filter { query.matches(it) }
                 .map {
                     val sig = it.fingerprint()
                     val wholeData = datum[sig]!!
-                    val v = range.map { ts ->
+                    val v = range.map { originalTs ->
+                        val ts = originalTs - offset
                         val subMap = wholeData.headMap(ts + 1)
                         if (subMap.isEmpty()) {
                             Mat.StaleValue

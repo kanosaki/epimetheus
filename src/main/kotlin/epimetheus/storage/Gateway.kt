@@ -16,12 +16,12 @@ interface Gateway {
 
     fun pushScraped(instance: String, ts: Long, mets: Collection<ScrapedSample>)
 
-    fun collectInstant(query: MetricMatcher, range: TimeFrames): GridMat
+    fun collectInstant(query: MetricMatcher, range: TimeFrames, offset: Long = 0): GridMat
     /**
      * @param frames Collect upper points
      * @param range Collecting Range by milliseconds
      */
-    fun collectRange(query: MetricMatcher, frames: TimeFrames, range: Long, offset: Long): RangeGridMat
+    fun collectRange(query: MetricMatcher, frames: TimeFrames, range: Long, offset: Long = 0L): RangeGridMat
 }
 
 class IgniteGateway(private val ignite: Ignite) : Gateway, AutoCloseable {
@@ -41,9 +41,9 @@ class IgniteGateway(private val ignite: Ignite) : Gateway, AutoCloseable {
     }
 
     // metric_name{label1=~"pat"}
-    override fun collectInstant(query: MetricMatcher, range: TimeFrames): GridMat {
+    override fun collectInstant(query: MetricMatcher, range: TimeFrames, offset: Long): GridMat {
         val mets = metricRegistry.lookupMetrics(query)
-        val vals = mets.parallelStream().map { eden.collectInstant(it, range) }
+        val vals = mets.parallelStream().map { eden.collectInstant(it, range, offset) }
         return GridMat.concatSeries(vals.toList(), range)
     }
 
