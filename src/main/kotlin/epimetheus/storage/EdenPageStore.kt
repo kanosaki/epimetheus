@@ -16,12 +16,12 @@ import org.apache.ignite.configuration.CacheConfiguration
 import org.apache.ignite.stream.StreamTransformer
 
 
-data class FreshSampleKey(
+data class EdenPageKey(
         @AffinityKeyMapped @QuerySqlField(notNull = true) val instance: String,
         @QuerySqlField(notNull = true) val metricID: Long,
         @QuerySqlField(notNull = true) val timestamp: Long)
 
-data class FreshSample(val values: DoubleArrayList, val timestamps: LongArrayList) {
+data class EdenPage(val values: DoubleArrayList, val timestamps: LongArrayList) {
 }
 
 /**
@@ -29,32 +29,32 @@ data class FreshSample(val values: DoubleArrayList, val timestamps: LongArrayLis
  * to achieve better scalability (though it assumes even scrape_interval distribution.)
  * And here, capacity efficiency is compromised for write performance.
  */
-class Fresh(val ignite: Ignite, val windowSize: Long = 5 * 60 * 1000) {
-    private val freshCache = ignite.getOrCreateCache(CacheConfiguration<FreshSampleKey, FreshSample>().apply {
+class EdenPageStore(val ignite: Ignite, val windowSize: Long = 5 * 60 * 1000) : AutoCloseable {
+    private val cache = ignite.getOrCreateCache(CacheConfiguration<EdenPageKey, EdenPage>().apply {
         name = FRESH_SAMPLES
         backups = 1
-        setIndexedTypes(FreshSampleKey::class.java, FreshSample::class.java)
+        //setIndexedTypes(EdenPageKey::class.java, EdenPage::class.java)
     })
 
     fun windowKey(ts: Long, delta: Int = 0): Long {
         return ((ts + windowSize * delta) / windowSize) * windowSize
     }
 
-    private val streamer = ignite.dataStreamer<FreshSampleKey, FreshSample>(FRESH_SAMPLES).apply {
+    private val streamer = ignite.dataStreamer<EdenPageKey, EdenPage>(FRESH_SAMPLES).apply {
         allowOverwrite(true)
         receiver(StreamTransformer.from { entry, arguments ->
             if (arguments.size != 1) {
                 ignite.log().error("Invalid argument size! $arguments")
                 return@from null
             }
-            val sample = arguments[0] as FreshSample
+            val sample = arguments[0] as EdenPage
             if (entry.value == null) {
-                entry.value = FreshSample(sample.values, sample.timestamps)
+                entry.value = EdenPage(sample.values, sample.timestamps)
             } else {
                 val v = entry.value
                 v.values.addElements(v.values.size, sample.values.elements())
                 v.timestamps.addElements(v.timestamps.size, sample.timestamps.elements())
-                entry.value = FreshSample(v.values, v.timestamps) // renew instance to take effect
+                entry.value = EdenPage(v.values, v.timestamps) // renew instance to take effect
             }
             return@from null
         })
@@ -64,8 +64,8 @@ class Fresh(val ignite: Ignite, val windowSize: Long = 5 * 60 * 1000) {
         samples.forEach { s ->
             val metricID = Metric.labelsFingerprintFNV(s.m)
             streamer.addData(
-                    FreshSampleKey(instance, metricID, windowKey(ts)),
-                    FreshSample(
+                    EdenPageKey(instance, metricID, windowKey(ts)),
+                    EdenPage(
                             DoubleArrayList(doubleArrayOf(s.value)),
                             LongArrayList(longArrayOf(ts))
                     )
@@ -77,13 +77,13 @@ class Fresh(val ignite: Ignite, val windowSize: Long = 5 * 60 * 1000) {
     fun collectRange(metric: Metric, frames: TimeFrames, range: Long, offset: Long): List<Pair<LongArray, DoubleArray>> {
         val instance = metric.m[Metric.instanceLabel] ?: ""
         val metricID = metric.fingerprint()
-        val collectingKeys = mutableSetOf<FreshSampleKey>()
+        val collectingKeys = mutableSetOf<EdenPageKey>()
         for (originalTs in frames) {
             val t = originalTs - offset
             var pageDelta = 0
             while (true) {
                 val wk = windowKey(t, pageDelta)
-                collectingKeys.add(FreshSampleKey(instance, metricID, wk))
+                collectingKeys.add(EdenPageKey(instance, metricID, wk))
                 if (wk <= 0 || t - wk < range) {
                     break
                 }
@@ -91,7 +91,7 @@ class Fresh(val ignite: Ignite, val windowSize: Long = 5 * 60 * 1000) {
             }
         }
         val m = Long2DoubleRBTreeMap()
-        freshCache.getEntries(collectingKeys).forEach {
+        cache.getEntries(collectingKeys).forEach {
             val v = it.value
             for (i in 0 until v.values.size) {
                 m[v.timestamps.getLong(i)] = v.values.getDouble(i)
@@ -116,13 +116,13 @@ class Fresh(val ignite: Ignite, val windowSize: Long = 5 * 60 * 1000) {
     fun collectInstant(metric: Metric, range: TimeFrames): Series {
         val instance = metric.m[Metric.instanceLabel] ?: ""
         val metricID = metric.fingerprint()
-        val collectingKeys = mutableSetOf<FreshSampleKey>()
+        val collectingKeys = mutableSetOf<EdenPageKey>()
         for (t in range) {
-            collectingKeys.add(FreshSampleKey(instance, metricID, windowKey(t)))
-            collectingKeys.add(FreshSampleKey(instance, metricID, windowKey(t, -1)))
+            collectingKeys.add(EdenPageKey(instance, metricID, windowKey(t)))
+            collectingKeys.add(EdenPageKey(instance, metricID, windowKey(t, -1)))
         }
         val m = Long2DoubleRBTreeMap()
-        freshCache.getEntries(collectingKeys).forEach {
+        cache.getEntries(collectingKeys).forEach {
             val v = it.value
             for (i in 0 until v.values.size) {
                 m[v.timestamps.getLong(i)] = v.values.getDouble(i)
@@ -145,8 +145,8 @@ class Fresh(val ignite: Ignite, val windowSize: Long = 5 * 60 * 1000) {
         return Series(metric, values, range.toLongArray())
     }
 
-    fun close() {
-        freshCache.close()
+    override fun close() {
+        cache.close()
         streamer.close()
     }
 }

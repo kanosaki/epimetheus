@@ -27,7 +27,7 @@ interface Meta : MetricRegistory {
     }
 }
 
-class IgniteMeta(val ignite: Ignite) : Meta {
+class IgniteMeta(val ignite: Ignite) : Meta, AutoCloseable {
     val metricMeta = ignite.getOrCreateCache(CacheConfiguration<MetricKey, MetricInfo>().apply {
         name = METRIC_META
         cacheMode = CacheMode.REPLICATED
@@ -62,5 +62,9 @@ class IgniteMeta(val ignite: Ignite) : Meta {
             mets.map { it.value.metric }
         }
 
+    }
+
+    override fun close() {
+        metricMeta.close()
     }
 }

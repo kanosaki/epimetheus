@@ -15,7 +15,7 @@ object CacheName {
         /**
          * Stores recently fetched samples, focused on throughput rather than capacity.
          */
-        const val FRESH_SAMPLES = "fresh"
+        const val FRESH_SAMPLES = "eden"
 
         const val METRIC_META = "metric_meta"
     }
