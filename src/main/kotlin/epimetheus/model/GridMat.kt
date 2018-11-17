@@ -32,7 +32,7 @@ class MatMatch(val mBase: GridMat, val mOther: GridMat, val matchIndex: IntArray
         if (baseIndex >= matchIndex.size) {
             throw RuntimeException("Invalid index: $baseIndex < ${matchIndex.size}")
         }
-        return mBase.metrics[baseIndex].filter(listOf(), listOf(Metric.nameLabel))
+        return mBase.metrics[baseIndex].filterWithout(Metric.nameLabel)
     }
 
     fun apply(fn: (lvals: DoubleArray, rvals: DoubleArray) -> DoubleArray): GridMat {
@@ -117,7 +117,7 @@ data class GridMat(val metrics: Array<Metric>, val timestamps: List<Long>, val v
     }
 
     fun dropMetricName(): GridMat {
-        return GridMat(metrics.map { it.filter(listOf(), listOf(Metric.nameLabel)) }.toTypedArray(), timestamps, values)
+        return GridMat(metrics.map { it.filterWithout(Metric.nameLabel) }.toTypedArray(), timestamps, values)
     }
 
     override fun toString(): String {

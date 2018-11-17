@@ -28,7 +28,7 @@ data class BinaryOp(
 
     companion object {
         private fun filterMetricNames(gridMat: GridMat): Array<Metric> {
-            return Array(gridMat.metrics.size) { gridMat.metrics[it].filter(listOf(), listOf(Metric.nameLabel)) }
+            return Array(gridMat.metrics.size) { gridMat.metrics[it].filterWithout(Metric.nameLabel) }
         }
 
         private fun simpleOp(fn: (lvals: DoubleArray, rvals: DoubleArray) -> DoubleArray): (GridMat, GridMat, MatMatch) -> GridMat {

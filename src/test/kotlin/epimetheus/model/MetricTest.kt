@@ -25,6 +25,14 @@ class MetricTest {
     }
 
     @Test
+    fun testFilter() {
+        val m1 = Metric.of("a", "foo" to "bar", "hoge" to "fuga")
+        val m2 = Metric.of("a", "hoge" to "fuga")
+        assertEquals(m2, m1.filterOn(Metric.nameLabel, "hoge"))
+        assertEquals(m2, m1.filterWithout("foo"))
+    }
+
+    @Test
     fun testFingerprintConsistency() {
         val sampleCount = 10000
         val mets = (0 until sampleCount).map { Metric.of("a", "num" to it.toString(), "foo" to "hogehgoe") }.toTypedArray()
