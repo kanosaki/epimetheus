@@ -1,5 +1,6 @@
 package epimetheus.model
 
+import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap
 import tech.tablesaw.api.StringColumn
 import tech.tablesaw.api.Table
 import tech.tablesaw.columns.Column
@@ -117,7 +118,13 @@ data class GridMat(val metrics: Array<Metric>, val timestamps: List<Long>, val v
     }
 
     fun dropMetricName(): GridMat {
-        return GridMat(metrics.map { it.filterWithout(Metric.nameLabel) }.toTypedArray(), timestamps, values)
+        val valuesMap = Long2ObjectOpenHashMap<DoubleArray>()
+        val metrics = metrics.map { it.filterWithout(Metric.nameLabel) }.toMutableList()
+        metrics.forEachIndexed { index, metric ->
+            valuesMap[metric.fingerprint()] = values[index]
+        }
+        metrics.sortBy { it.fingerprint() }
+        return GridMat(metrics.toTypedArray(), timestamps, metrics.map { valuesMap[it.fingerprint()] })
     }
 
     override fun toString(): String {

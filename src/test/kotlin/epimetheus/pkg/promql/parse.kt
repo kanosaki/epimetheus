@@ -82,7 +82,15 @@ class ParseTest {
                                         vec("baz"),
                                         VectorMatching(VectorMatchingCardinality.OneToOne, listOf("b"), false, listOf())),
                                 VectorMatching(VectorMatchingCardinality.OneToOne, listOf("a"), true, listOf())),
-
+                "rate(http_requests{group=~\"pro.*\"}[1m])" to
+                        FunctionCall(
+                                Function.builtins.first { it.name == "rate" },
+                                listOf(
+                                        MatrixSelector("http_requests", listOf(
+                                                LabelMatch("group", "=~", str("pro.*"))
+                                        ), Duration.ofMinutes(1), Duration.ZERO)
+                                )
+                        ),
                 "sum(foo + bar)" to
                         AggregatorCall(
                                 bind.aggregators["sum"]!!,

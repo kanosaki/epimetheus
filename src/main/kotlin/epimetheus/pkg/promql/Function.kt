@@ -82,11 +82,19 @@ data class Function(
                     val m = args[0]
                     when (m) {
                         is RangeGridMat -> {
-                            m.applyUnifyFn { m, ts, vs ->
+                            m.applyUnifyFn { met, ts, vs ->
                                 when {
-                                    vs.isEmpty() -> Double.NaN
-                                    vs.size == 1 -> vs[0]
-                                    else -> vs.last() - vs.first()
+                                    vs.size < 2 -> Mat.StaleValue
+                                    //else -> (vs.last() - vs.first()) / ((ts.last() - ts.first()) / 1000) // ms -> s
+                                    else -> {
+                                        var leapAdjust = 0.0
+                                        for (i in 1 until vs.size) {
+                                            if (vs[i] < vs[i - 1]) {
+                                                leapAdjust += vs[i-1] - vs[i]
+                                            }
+                                        }
+                                        ((vs.last() + leapAdjust) - vs.first()) / (m.windowSize / 1000) // ms -> s
+                                    }
                                 }
                             }
                         }

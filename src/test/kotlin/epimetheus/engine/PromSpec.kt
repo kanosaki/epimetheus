@@ -140,8 +140,8 @@ class PromSpec(val lines: List<String>) : Executable {
 
     data class LoadCmd(val gap: Duration, val specs: List<SpecSeriesDesc>) : SpecCmd() {
         override fun eval(ctx: SpecContext) {
-            var currentTs: Long = 0
             for (spec in specs) {
+                var currentTs: Long = 0
                 spec.expand(null).forEach {
                     // null -> blank value, skip and just increment timestamp
                     if (it != null) {
@@ -165,15 +165,15 @@ class PromSpec(val lines: List<String>) : Executable {
             val result = ctx.interpreter.evalAst(expr, tf, tracer)
             val expected = if (specs.isNotEmpty() && specs.all { it is SpecLiteralDesc }) {
                 assert(specs.size == 1 && specs[0].series.size == 1)
-                val vals= specs[0].series[0].expand(null)
+                val vals = specs[0].series[0].expand(null)
                 assert(vals.size == 1 && vals[0] != null)
                 Scalar(vals[0]!!)
             } else {
                 val series = specs.map {
                     it as SpecSeriesDesc
                     Metric(it.m) to Mat.mapValue(it.expand(null))
-                }
-                Mat.instant(series.map { it.first }.toTypedArray(), offset.toMillis(), series.map { it.second[0] })
+                }.sortedBy { it.first.fingerprint() }
+                GridMat(series.map { it.first }.toTypedArray(), tf, series.map { it.second })
             }
             try {
                 TestUtils.assertValueEquals(expected, result, true, true)
@@ -182,7 +182,11 @@ class PromSpec(val lines: List<String>) : Executable {
                 println("====== Eval TRACE")
                 tracer.printTrace()
                 println("====== Eval EXPECTED")
-                println(expected)
+                when (expected) {
+                    is GridMat -> println(expected.toTable().printAll())
+                    is Scalar -> println("SCALAR ${expected.value}")
+                    else -> println("UNKNOWN Value type: ${expected.javaClass}: $expected")
+                }
                 println("====== Eval ACTUAL")
                 when (result) {
                     is GridMat -> println(result.toTable().printAll())
@@ -230,7 +234,20 @@ object PromSpecTests {
     fun fromPrometheus(): Collection<DynamicTest> {
         val res = PromSpecTests::class.java.getResource("promspec/prometheus")
         val files = File(res.path).listFiles()
-        return files.filter { it.name == "literals.test" || it.name == "staleness.test" || it.name == "selectors.test" }.map {
+        return files.map {
+            it.inputStream().use { input ->
+                val lines = IOUtils.readLines(input, Charsets.UTF_8)
+                        .map { it.trim() }
+                DynamicTest.dynamicTest(it.name, PromSpec(lines))
+            }
+        }
+    }
+
+    @TestFactory
+    fun fromPrometheusOne(): Collection<DynamicTest> {
+        val res = PromSpecTests::class.java.getResource("promspec/prometheus")
+        val files = File(res.path).listFiles()
+        return files.filter { it.name == "selectors.test" }.map {
             it.inputStream().use { input ->
                 val lines = IOUtils.readLines(input, Charsets.UTF_8)
                         .map { it.trim() }

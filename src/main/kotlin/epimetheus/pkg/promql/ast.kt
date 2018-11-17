@@ -1,10 +1,10 @@
 package epimetheus.pkg.promql
 
+import epimetheus.DurationUtil.toPromString
 import epimetheus.model.LabelMatchType
 import epimetheus.model.LabelMatcher
 import epimetheus.model.Metric
 import epimetheus.model.MetricMatcher
-import epimetheus.DurationUtil.toPromString
 import java.time.Duration
 
 interface Expression {
@@ -40,7 +40,7 @@ data class LabelMatch(val name: String, val op: String, val rhs: Literal) {
                 throw PromQLException("Unknown label match operator: $op")
             }
         }
-        return LabelMatcher(lmt, rhs.toString())
+        return LabelMatcher(lmt, rhs.labelMatchExpr())
     }
 }
 
@@ -73,7 +73,11 @@ data class InstantSelector(override val name: String, override val labels: List<
 
 data class MatrixSelector(override val name: String, override val labels: List<LabelMatch>, val range: Duration, override val offset: Duration) : SelectorBase() {
     override fun toString(): String {
-        return super.toString() + "[${range.toPromString()}]"
+        if (offset.isZero) {
+            return super.toString() + "[${range.toPromString()}]"
+        } else {
+            return super.toString() + "[${range.toPromString()}] offset ${offset.toPromString()}"
+        }
     }
 }
 
@@ -148,15 +152,25 @@ data class AggregatorCall(val agg: Aggregator, val params: List<Expression>, val
     }
 }
 
-interface Literal : Expression
+interface Literal : Expression {
+    fun labelMatchExpr(): String
+}
 
 data class StringLiteral(val value: String) : Literal {
+    override fun labelMatchExpr(): String {
+        return value
+    }
+
     override fun toString(): String {
         return "\"$value\""
     }
 }
 
 data class NumberLiteral(val value: Double) : Literal {
+    override fun labelMatchExpr(): String {
+        return value.toString()
+    }
+
     override fun toString(): String {
         return value.toString()
     }
