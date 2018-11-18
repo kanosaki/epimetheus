@@ -1,9 +1,6 @@
 package epimetheus.storage
 
-import epimetheus.model.GridMat
-import epimetheus.model.MetricMatcher
-import epimetheus.model.RangeGridMat
-import epimetheus.model.TimeFrames
+import epimetheus.model.*
 import epimetheus.pkg.textparse.ScrapedSample
 import org.apache.ignite.Ignite
 import kotlin.streams.toList
@@ -22,12 +19,14 @@ interface Gateway {
      * @param range Collecting Range by milliseconds
      */
     fun collectRange(query: MetricMatcher, frames: TimeFrames, range: Long, offset: Long = 0L): RangeGridMat
+
+    val metricRegistry: MetricRegistry
 }
 
 class IgniteGateway(private val ignite: Ignite) : Gateway, AutoCloseable {
     val eden = EdenPageStore(ignite)
     val aged = Aged(ignite)
-    val metricRegistry = IgniteMeta(ignite)
+    override val metricRegistry = IgniteMeta(ignite)
 
     override fun pushScraped(instance: String, ts: Long, mets: Collection<ScrapedSample>) {
         metricRegistry.registerMetricsFromSamples(mets)

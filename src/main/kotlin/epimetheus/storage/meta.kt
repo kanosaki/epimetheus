@@ -15,7 +15,7 @@ typealias MetricKey = Signature
 
 data class MetricInfo(@QueryTextField val name: String, val metric: Metric)
 
-interface Meta : MetricRegistory {
+interface Meta : MetricRegistry {
     fun registerMetricsFromSamples(samples: Collection<ScrapedSample>)
     /**
      * Collects metrics with query, result must be sorted by its fingerprint

@@ -4,11 +4,12 @@ import epimetheus.model.*
 import epimetheus.pkg.textparse.ScrapedSample
 import java.util.*
 
-class MockGateway() : Gateway, MetricRegistory {
+class MockGateway() : Gateway, MetricRegistry {
     //  NOTE: sortedmap sorts samples by ASC order
     // (timestamp, metricID) -> ScrapedSample
     val datum = mutableMapOf<Signature, SortedMap<Long, Double>>()
     val metrics = sortedMapOf<Signature, Metric>()
+    override val metricRegistry = this
 
     override fun pushScraped(instance: String, ts: Long, mets: Collection<ScrapedSample>) {
         mets.forEach {

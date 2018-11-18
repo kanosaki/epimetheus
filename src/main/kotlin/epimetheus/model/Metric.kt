@@ -10,7 +10,7 @@ import java.util.*
 
 
 class UndefinedMetricIDException(metricId: Long) : RuntimeException("MetricID: $metricId is not registered")
-interface MetricRegistory {
+interface MetricRegistry {
     fun metric(metricId: Long): Metric?
     fun mustMetric(metricId: Long): Metric {
         return metric(metricId) ?: throw UndefinedMetricIDException(metricId)
