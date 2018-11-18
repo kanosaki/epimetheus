@@ -105,7 +105,7 @@ object PromQL {
                 return null
             }
             val labels = ctx.labelList().label().map { it.text!! }
-            return when (ctx.getChild(0).text) {
+            return when (ctx.getChild(0).text.toLowerCase()) {
                 "on" -> LabelMatchOption(LabelMatchOptionType.On, labels)
                 "ignoring" -> LabelMatchOption(LabelMatchOptionType.Ignoring, labels)
                 else -> throw AssertionError("never here")
@@ -119,7 +119,7 @@ object PromQL {
                 return null
             }
             val labels = ctx.labelList()?.label()?.map { it.text!! } ?: listOf()
-            return when (ctx.getChild(0).text) {
+            return when (ctx.getChild(0).text.toLowerCase()) {
                 "group_left" -> LabelGroupOption(LabelGroupOptionType.Left, labels)
                 "group_right" -> LabelGroupOption(LabelGroupOptionType.Right, labels)
                 else -> throw AssertionError("never here")
@@ -133,7 +133,7 @@ object PromQL {
             return if (ctx.childCount == 1) {
                 this.visit(ctx.getChild(0))
             } else {
-                val opName = ctx.getChild(1).text
+                val opName = ctx.getChild(1).text.toLowerCase()
                 val op = binding.binaryOps[opName] ?: throw PromQLException("Binary operator $opName is invalid")
                 val lmo = if (match == null) null else labelMatchOptsVisitor.visit(match)
                 val lgo = if (group == null) null else labelGroupOptsVisitor.visit(group)
@@ -226,7 +226,7 @@ object PromQL {
         }
 
         override fun visitApplication(ctx: PromQLParser.ApplicationContext?): Expression {
-            val fnName = ctx!!.identifier().text
+            val fnName = ctx!!.identifier().text.toLowerCase()
             val fnkey = fnName.toLowerCase()
             val aggrGroup = ctx.aggregateGroup()
             val exprs = ctx.expression().map { visitChildren(it)!! }

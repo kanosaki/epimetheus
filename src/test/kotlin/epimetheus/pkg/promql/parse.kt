@@ -84,7 +84,7 @@ class ParseTest {
                                 VectorMatching(VectorMatchingCardinality.OneToOne, listOf("a"), true, listOf())),
                 "rate(http_requests{group=~\"pro.*\"}[1m])" to
                         FunctionCall(
-                                Function.builtins.first { it.name == "rate" },
+                                bind.functions["rate"]!!,
                                 listOf(
                                         MatrixSelector("http_requests", listOf(
                                                 LabelMatch("group", "=~", str("pro.*"))
@@ -111,6 +111,14 @@ class ParseTest {
                                 listOf(
                                         vec("foo")
                                 ), AggregatorGroup(AggregatorGroupType.By, listOf("a", "b"))),
+                "SUM(http_requests{instance=\"0\"}) BY(job)" to
+                        AggregatorCall(
+                                bind.aggregators["sum"]!!,
+                                listOf(
+                                        InstantSelector("http_requests", listOf(LabelMatch("instance", "=", str("0"))), Duration.ZERO)
+                                ),
+                                AggregatorGroup(AggregatorGroupType.By, listOf("job"))
+                        ),
                 "node_cpu / on (instance) group_left sum by (instance,job)(node_cpu)" to
                         BinaryCall(
                                 bind.binaryOps["/"]!!,

@@ -19,10 +19,32 @@ BLANK: '_';
 Times: 'x';
 
 
-fragment I: [Ii];
-fragment N: [Nn];
-fragment F: [Ff];
-fragment A: [Aa];
+fragment A : [aA]; // match either an 'a' or 'A'
+fragment B : [bB];
+fragment C : [cC];
+fragment D : [dD];
+fragment E : [eE];
+fragment F : [fF];
+fragment G : [gG];
+fragment H : [hH];
+fragment I : [iI];
+fragment J : [jJ];
+fragment K : [kK];
+fragment L : [lL];
+fragment M : [mM];
+fragment N : [nN];
+fragment O : [oO];
+fragment P : [pP];
+fragment Q : [qQ];
+fragment R : [rR];
+fragment S : [sS];
+fragment T : [tT];
+fragment U : [uU];
+fragment V : [vV];
+fragment W : [wW];
+fragment X : [xX];
+fragment Y : [yY];
+fragment Z : [zZ];
 
 Inf: I N F;
 NaN: N A N;
@@ -44,26 +66,26 @@ OpNeqRegex: '!~';
 OpPow: '^';
 
 
-LOpAnd: 'and';
-LOpOr: 'or';
-LOpUnless: 'unless';
+LOpAnd: A N D;
+LOpOr: O R;
+LOpUnless: U N L E S S;
 
 // Aggregators
 
 // Keywords
-KWAlert: 'alert';
-KWIf: 'if';
-KWFor: 'for';
-KWLabels: 'labels';
-KWAnnotations: 'annotations';
-KWOffset: 'offset';
-KWBy: 'by';
-KWWithout: 'without';
-KWOn: 'on';
-KWIgnoring: 'ignoring';
-KWGroupLeft: 'group_left';
-KWGroupRight: 'group_right';
-KWBool: 'bool';
+KWAlert: A L E R T;
+KWIf: I F;
+KWFor: F O R;
+KWLabels: L A B E L S;
+KWAnnotations: A N N O T A T I O N S;
+KWOffset: O F F S E T;
+KWBy: B Y;
+KWWithout: W I T H O U T;
+KWOn: O N;
+KWIgnoring: I G N O R I N G;
+KWGroupLeft: G R O U P '_' L E F T;
+KWGroupRight: G R O U P '_' R I G H T;
+KWBool: B O O L;
 
 
 
