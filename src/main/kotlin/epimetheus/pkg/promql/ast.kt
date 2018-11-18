@@ -58,8 +58,8 @@ abstract class SelectorBase : Selector {
         ))
     }
 
-    override fun toString(): String {
-        val lms = labels.map { it.toString() }.joinToString(",")
+    fun selectorTostring(): String {
+        val lms = labels.joinToString(",") { "${it.name}${it.op}${it.rhs}" }
         return when {
             name == "" -> "{$lms}"
             lms.isEmpty() -> name
@@ -69,14 +69,21 @@ abstract class SelectorBase : Selector {
 }
 
 data class InstantSelector(override val name: String, override val labels: List<LabelMatch>, override val offset: Duration) : SelectorBase() {
+    override fun toString(): String {
+        return if (offset.isZero) {
+            this.selectorTostring()
+        } else {
+            this.selectorTostring() + " offset ${offset.toPromString()}"
+        }
+    }
 }
 
 data class MatrixSelector(override val name: String, override val labels: List<LabelMatch>, val range: Duration, override val offset: Duration) : SelectorBase() {
     override fun toString(): String {
-        if (offset.isZero) {
-            return super.toString() + "[${range.toPromString()}]"
+        return if (offset.isZero) {
+            this.selectorTostring() + "[${range.toPromString()}]"
         } else {
-            return super.toString() + "[${range.toPromString()}] offset ${offset.toPromString()}"
+            this.selectorTostring() + "[${range.toPromString()}] offset ${offset.toPromString()}"
         }
     }
 }

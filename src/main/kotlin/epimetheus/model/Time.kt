@@ -24,10 +24,9 @@ data class TimeFrames(val start: Long, val end: Long, val step: Long) : List<Lon
 
     override fun toString(): String {
         return when {
-            step > 1L -> "[$start→$end,$step]"
-            step == 1L -> "[$start→$end]"
-            step == 0L -> "[$start]"
-            else -> throw RuntimeException("never here")
+            start == end -> "[$start]"
+            step == 1L -> "[$start→$end,$step]"
+            else -> "[$start→$end,$step]"
         }
     }
 
