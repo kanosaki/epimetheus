@@ -40,7 +40,7 @@ class SimpleTest {
         val tf = TimeFrames.instant(0)
         val mat = interp.eval("a", tf)
         assertValueEquals(
-                GridMat.of(TimeFrames.instant(0), Metric.of("a") to doubleArrayOf(1.0)),
+                GridMat.of(TimeFrames.instant(0), 0L, Metric.of("a") to doubleArrayOf(1.0)),
                 mat
         )
     }
@@ -95,7 +95,7 @@ class SimpleTest {
                 "z / 0" to doubleArrayOf(Double.NaN, Double.NaN, Double.NaN)  // positive number / 0.0 --> +Inf in prometheus
         ).forEachIndexed { index, case ->
             val mat = interp.eval(case.first, tf)
-            assertValueEquals(GridMat.of(tf, Metric.empty to case.second), mat, allowNonDetComparsion = true, msg = "failed at case $index")
+            assertValueEquals(GridMat.of(tf, 0L, Metric.empty to case.second), mat, allowNonDetComparsion = true, msg = "failed at case $index")
         }
 
     }

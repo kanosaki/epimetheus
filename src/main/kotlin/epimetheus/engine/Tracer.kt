@@ -37,8 +37,14 @@ class FullLoggingTracer : Tracer {
 
     override fun onEvalExpr(ast: Expression, result: Value, depth: Int) {
         val finished = System.nanoTime()
-        val beginTime = timerStack.pop()
-        log.add(EvalLog(ast, finished - beginTime, result, timerStack.size))
+        try {
+            val beginTime = timerStack.pop()
+            log.add(EvalLog(ast, finished - beginTime, result, timerStack.size))
+        } catch (e: EmptyStackException) {
+            println("EVAL LOG")
+            println(log.joinToString("\n"))
+            e.printStackTrace()
+        }
     }
 
     fun printTrace(out: PrintStream = System.out, indent: Int = 2): String {

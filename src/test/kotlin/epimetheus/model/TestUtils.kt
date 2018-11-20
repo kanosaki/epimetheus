@@ -76,6 +76,9 @@ object TestUtils {
                 }
             }
         }
+        //if (m1.offset != m2.offset) {
+        //    fail("RangeGridMat offset not match: $m1 != $m2 $memo")
+        //}
     }
 
     fun assertMatEquals(m1: GridMat, m2: GridMat, allowNonDetComparsion: Boolean = false, memo: String = "") {
@@ -102,5 +105,8 @@ object TestUtils {
                 }
             }
         }
+        //if (m1.offset != m2.offset) {
+        //    fail("GridMat offset not match: ${m1.offset} != ${m2.offset} $memo")
+        //}
     }
 }

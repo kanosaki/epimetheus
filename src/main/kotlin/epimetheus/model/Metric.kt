@@ -42,8 +42,8 @@ open class Metric(val m: SortedMap<String, String>) {
         return Metric(m.filter { onLabels.contains(it.key) }.toSortedMap())
     }
 
-    fun filterWithout(vararg ignoreLabels: String): Metric {
-        return Metric(m.filter { !ignoreLabels.contains(it.key) }.toSortedMap())
+    fun filterWithout(ignoreName: Boolean, vararg ignoreLabels: String): Metric {
+        return Metric(m.filter { !ignoreLabels.contains(it.key) && (!ignoreName || it.key != Metric.nameLabel) }.toSortedMap())
     }
 
     override fun toString(): String {

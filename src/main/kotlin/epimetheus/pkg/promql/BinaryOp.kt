@@ -28,7 +28,7 @@ data class BinaryOp(
 
     companion object {
         private fun filterMetricNames(gridMat: GridMat): Array<Metric> {
-            return Array(gridMat.metrics.size) { gridMat.metrics[it].filterWithout(Metric.nameLabel) }
+            return Array(gridMat.metrics.size) { gridMat.metrics[it].filterWithout(true) }
         }
 
         private fun simpleOp(fn: (lvals: DoubleArray, rvals: DoubleArray) -> DoubleArray): (GridMat, GridMat, MatMatch) -> GridMat {
@@ -231,37 +231,19 @@ data class BinaryOp(
                         scalarAndScalar = { s1, s2 ->
                             Scalar(s1.value % s2.value)
                         }
-                )//,
-//                BinaryOp("^") { l, r, mm ->
-//                    l
-//                },
-//                BinaryOp("==", isComparisionOperator = true) { l, r, mm ->
-//                    l
-//                },
-//                BinaryOp("!=", isComparisionOperator = true) { l, r, mm ->
-//                    l
-//                },
-//                BinaryOp(">", isComparisionOperator = true) { l, r, mm ->
-//                    l
-//                },
-//                BinaryOp("<", isComparisionOperator = true) { l, r, mm ->
-//                    l
-//                },
-//                BinaryOp(">=", isComparisionOperator = true) { l, r, mm ->
-//                    l
-//                },
-//                BinaryOp("<=", isComparisionOperator = true) { l, r, mm ->
-//                    l
-//                },
-//                BinaryOp("and", isSetOperator = true) { l, r, mm ->
-//                    l
-//                },
-//                BinaryOp("or", isSetOperator = true) { l, r, mm ->
-//                    l
-//                },
-//                BinaryOp("unless", isSetOperator = true) { l, r, mm ->
-//                    l
-//                }
+                ),
+                BinaryOp("^", gridMatAndMat = { m1, m2, matMatch -> TODO() }, gridMatAndScalar = { m, s -> TODO() }, scalarAndGridMat = { s, m -> TODO() }, scalarAndScalar = { s1, s2 -> TODO() }),
+
+                BinaryOp("==", isComparisionOperator = true, gridMatAndMat = { m1, m2, matMatch -> TODO() }, gridMatAndScalar = { m, s -> TODO() }, scalarAndGridMat = { s, m -> TODO() }, scalarAndScalar = { s1, s2 -> TODO() }),
+                BinaryOp("!=",isComparisionOperator = true, gridMatAndMat = { m1, m2, matMatch -> TODO() }, gridMatAndScalar = { m, s -> TODO() }, scalarAndGridMat = { s, m -> TODO() }, scalarAndScalar = { s1, s2 -> TODO() }),
+                BinaryOp(">", isComparisionOperator = true, gridMatAndMat = { m1, m2, matMatch -> TODO() }, gridMatAndScalar = { m, s -> TODO() }, scalarAndGridMat = { s, m -> TODO() }, scalarAndScalar = { s1, s2 -> TODO() }),
+                BinaryOp("<", isComparisionOperator = true, gridMatAndMat = { m1, m2, matMatch -> TODO() }, gridMatAndScalar = { m, s -> TODO() }, scalarAndGridMat = { s, m -> TODO() }, scalarAndScalar = { s1, s2 -> TODO() }),
+                BinaryOp(">=", isComparisionOperator = true, gridMatAndMat = { m1, m2, matMatch -> TODO() }, gridMatAndScalar = { m, s -> TODO() }, scalarAndGridMat = { s, m -> TODO() }, scalarAndScalar = { s1, s2 -> TODO() }),
+                BinaryOp("<=", isComparisionOperator = true, gridMatAndMat = { m1, m2, matMatch -> TODO() }, gridMatAndScalar = { m, s -> TODO() }, scalarAndGridMat = { s, m -> TODO() }, scalarAndScalar = { s1, s2 -> TODO() }),
+
+                BinaryOp("and", isSetOperator = true , gridMatAndMat = { m1, m2, matMatch -> TODO() }, gridMatAndScalar = { m, s -> TODO() }, scalarAndGridMat = { s, m -> TODO() }, scalarAndScalar = { s1, s2 -> TODO() }),
+                BinaryOp("or", isSetOperator = true , gridMatAndMat = { m1, m2, matMatch -> TODO() }, gridMatAndScalar = { m, s -> TODO() }, scalarAndGridMat = { s, m -> TODO() }, scalarAndScalar = { s1, s2 -> TODO() }),
+                BinaryOp("unless", isSetOperator = true , gridMatAndMat = { m1, m2, matMatch -> TODO() }, gridMatAndScalar = { m, s -> TODO() }, scalarAndGridMat = { s, m -> TODO() }, scalarAndScalar = { s1, s2 -> TODO() })
         )
     }
 }

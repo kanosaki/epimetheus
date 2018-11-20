@@ -5,32 +5,41 @@ import epimetheus.model.TimeFrames
 import epimetheus.model.Value
 import epimetheus.pkg.promql.*
 import epimetheus.storage.Gateway
+import java.util.*
 
 class Eval(val frames: TimeFrames, val storage: Gateway, val tracer: Tracer = Tracer.empty) {
     fun eval(ast: Expression): Value {
-        val node = DefaultEvalNode(frames, this, null)
+        val node = DefaultEvalNode(this, null)
         return node.evalExpr(ast, 0)
     }
 }
 
+// EvalNodeHelper at Prometheus
 interface EvalNode {
-    val timeScope: TimeFrames
+    val top: Eval
+
     fun evalExpr(ast: Expression, depth: Int): Value
+    fun locale(): Calendar {
+        return Calendar.getInstance()
+    }
+
+    val frames: TimeFrames
+        get() = top.frames
 }
 
 
-class DefaultEvalNode(override val timeScope: TimeFrames, val top: Eval, val parent: EvalNode?) : EvalNode {
+class DefaultEvalNode(override val top: Eval, val parent: EvalNode?) : EvalNode {
     override fun evalExpr(ast: Expression, depth: Int): Value {
         top.tracer.enteringEvalExpr(ast, depth)
         // TODO: optimize
         val res = when (ast) {
             is NumberLiteral -> Scalar(ast.value)
             is InstantSelector -> {
-                top.storage.collectInstant(ast.matcher, timeScope)
+                top.storage.collectInstant(ast.matcher, top.frames, ast.offset.toMillis())
             }
             is MatrixSelector -> {
                 val rangeMs = ast.range.toMillis()
-                top.storage.collectRange(ast.matcher, timeScope, rangeMs, 0)
+                top.storage.collectRange(ast.matcher, top.frames, rangeMs, ast.offset.toMillis())
             }
             is BinaryCall -> {
                 val evLhs = evalExpr(ast.lhs, depth + 1)
@@ -43,7 +52,7 @@ class DefaultEvalNode(override val timeScope: TimeFrames, val top: Eval, val par
                 ast.agg.evalFn(params, ast.groups)
             }
             is FunctionCall -> {
-                val childNode = DefaultEvalNode(timeScope, top, this)
+                val childNode = DefaultEvalNode(top, this)
                 val params = ast.params.map { childNode.evalExpr(it, depth + 1) }
                 ast.fn.call(params, this)
             }

@@ -149,7 +149,7 @@ object GatewayTest {
         }
 
         val actual = storage.collectInstant(MetricMatcher.nameMatch("x.*", true), TimeFrames(5, 25, 10))
-        val expected = GridMat.of(TimeFrames(5, 25, 10),
+        val expected = GridMat.of(TimeFrames(5, 25, 10), 0L,
                 met("xx", "a:123") to doubleArrayOf(0.0, 10.0, 20.0),
                 met("xy", "a:123") to doubleArrayOf(0.0, 10.0, 20.0),
                 met("xx", "b:234") to doubleArrayOf(0.0, 10.0, 20.0),
@@ -160,7 +160,7 @@ object GatewayTest {
         assertMatEquals(expected, actual)
 
         val actualOffset = storage.collectInstant(MetricMatcher.nameMatch("x.*", true), TimeFrames(25, 35, 10), 10)
-        val expectedOffset = GridMat.of(TimeFrames(25, 35, 10),
+        val expectedOffset = GridMat.of(TimeFrames(25, 35, 10), 10L,
                 met("xx", "a:123") to doubleArrayOf(10.0, 20.0),
                 met("xy", "a:123") to doubleArrayOf(10.0, 20.0),
                 met("xx", "b:234") to doubleArrayOf(10.0, 20.0),
@@ -219,7 +219,8 @@ object GatewayTest {
                                 longArrayOf(0, 10, 20, 30) to doubleArrayOf(0.0, 10.0, 20.0, 30.0),
                                 longArrayOf(20, 30, 40, 50) to doubleArrayOf(20.0, 30.0, 40.0, 50.0)
                         )
-                )
+                ),
+                10L
         )
         assertRangeMatEquals(expectedOffset, actualOffset)
     }
@@ -254,7 +255,7 @@ object GatewayTest {
                         arrayOf()
         ).forEachIndexed { index, pair ->
             val actual = storage.collectInstant(MetricMatcher.nameMatch("x.*", true), pair.first).prune()
-            val expected = GridMat.of(pair.first, *pair.second)
+            val expected = GridMat.of(pair.first, 0L, *pair.second)
             assertMatEquals(expected, actual, memo = "at index = $index")
         }
     }

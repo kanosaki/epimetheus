@@ -31,7 +31,7 @@ class MockGateway() : Gateway, MetricRegistry {
                 r
             }
         }
-        return RangeGridMat(mets, frames, range, values)
+        return RangeGridMat(mets, frames, range, values, offset)
     }
 
     override fun collectInstant(query: MetricMatcher, range: TimeFrames, offset: Long): GridMat {
@@ -57,7 +57,7 @@ class MockGateway() : Gateway, MetricRegistry {
                     Series(it, v.toDoubleArray(), range.toLongArray())
                 }
                 .sortedBy { it.metric.fingerprint() }
-        return GridMat.concatSeries(serieses, range)
+        return GridMat.concatSeries(serieses, range, offset)
     }
 
     override fun metric(metricId: Long): Metric? {

@@ -16,19 +16,19 @@ interface SpecValue {
 
 data class VNumber(val initial: Double, val delta: Double, override val repeat: Int) : SpecValue {
     override fun expand(currentValue: Double?): List<Double?> {
-        return List(repeat) { initial + it * delta }
+        return List(repeat + 1) { initial + it * delta }
     }
 }
 
 data class VStale(override val repeat: Int) : SpecValue {
     override fun expand(currentValue: Double?): List<Double?> {
-        return List(repeat) { Mat.StaleValue }
+        return List(repeat + 1) { Mat.StaleValue }
     }
 }
 
 data class VBlank(override val repeat: Int) : SpecValue {
     override fun expand(currentValue: Double?): List<Double?> {
-        return List(repeat) { null }
+        return List(repeat + 1) { null }
     }
 }
 
@@ -82,7 +82,7 @@ object SpecSeriesParser {
     class SpecDescVisitor : PromExporterParserBaseVisitor<SpecValue>() {
 
         override fun visitSpecBlanks(ctx: PromExporterParser.SpecBlanksContext?): SpecValue {
-            var times = 1
+            var times = 0
             if (ctx!!.NAME() != null) {
                 val timesStr = ctx.NAME().text
                 if (timesStr.startsWith("x")) {
@@ -97,7 +97,7 @@ object SpecSeriesParser {
         }
 
         override fun visitSpecValues(ctx: PromExporterParser.SpecValuesContext?): SpecValue {
-            var times = 1
+            var times = 0
             if (ctx!!.integer() != null) {
                 times = ctx.integer().text.toInt()
             }

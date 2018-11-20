@@ -36,7 +36,7 @@ class IgniteGateway(private val ignite: Ignite) : Gateway, AutoCloseable {
     override fun collectRange(query: MetricMatcher, frames: TimeFrames, range: Long, offset: Long): RangeGridMat {
         val mets = metricRegistry.lookupMetrics(query)
         val vals = mets.parallelStream().map { eden.collectRange(it, frames, range, offset) }
-        return RangeGridMat(mets, frames, range, vals.toList())
+        return RangeGridMat(mets, frames, range, vals.toList(), offset)
     }
 
     // metric_name{label1=~"pat"}

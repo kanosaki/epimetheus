@@ -33,7 +33,7 @@ class MatMatch(val mBase: GridMat, val mOther: GridMat, val matchIndex: IntArray
         if (baseIndex >= matchIndex.size) {
             throw RuntimeException("Invalid index: $baseIndex < ${matchIndex.size}")
         }
-        return mBase.metrics[baseIndex].filterWithout(Metric.nameLabel)
+        return mBase.metrics[baseIndex].filterWithout(true)
     }
 
     fun apply(fn: (lvals: DoubleArray, rvals: DoubleArray) -> DoubleArray): GridMat {
@@ -66,6 +66,11 @@ data class Scalar(val value: Double) : Value
 data class StringValue(val value: String) : Value
 
 interface Mat : Value {
+    /**
+     * A metadata that what offset value was used when collecting this Mat
+     */
+    val offset: Long
+
     companion object {
         val StaleValue = SpecialValue.STALE_VALUE
         private val specialValueNames = mapOf(StaleValue.toRawBits() to "STALE")
@@ -86,24 +91,25 @@ interface Mat : Value {
         }
 
         // values should be DoubleArray?
-        fun instant(metrics: Array<Metric>, timestamp: Long, values: List<Double>): GridMat {
-            return GridMat(metrics, listOf(timestamp), values.map { DoubleArray(1) { i -> values[i] } })
+        fun instant(metrics: Array<Metric>, timestamp: Long, values: List<Double>, offset: Long = 0L): GridMat {
+            return GridMat(metrics, listOf(timestamp), values.map { DoubleArray(1) { i -> values[i] } }, offset)
         }
     }
 }
 
-data class RangeGridMat(val metrics: List<Metric>, val timestamps: List<Long>, val windowSize: Long, val series: List<List<Pair<LongArray, DoubleArray>>>) : Mat {
-    fun applyUnifyFn(fn: (Metric, LongArray, DoubleArray) -> Double): GridMat {
+data class RangeGridMat(val metrics: List<Metric>, val timestamps: List<Long>, val windowSize: Long, val series: List<List<Pair<LongArray, DoubleArray>>>, override val offset: Long = 0) : Mat {
+    fun applyUnifyFn(fn: (Metric, Long, LongArray, DoubleArray) -> Double): GridMat {
         val values = mutableListOf<DoubleArray>()
         for (mIdx in 0 until metrics.size) {
             val m = metrics[mIdx]
             val ary = DoubleArray(timestamps.size) { tIdx ->
                 val pair = series[mIdx][tIdx]
-                fn(m, pair.first, pair.second)
+                val ts = timestamps[tIdx]
+                fn(m, ts, pair.first, pair.second)
             }
             values += ary
         }
-        return GridMat(metrics.toTypedArray(), timestamps, values)
+        return GridMat(metrics.toTypedArray(), timestamps, values, offset)
     }
 
     override fun toString(): String {
@@ -111,7 +117,7 @@ data class RangeGridMat(val metrics: List<Metric>, val timestamps: List<Long>, v
     }
 }
 
-data class GridMat(val metrics: Array<Metric>, val timestamps: List<Long>, val values: List<DoubleArray>) : Mat {
+data class GridMat(val metrics: Array<Metric>, val timestamps: List<Long>, val values: List<DoubleArray>, override val offset: Long = 0) : Mat {
     init {
         assert(values.size == metrics.size)
         assert(values.all { it.size == timestamps.size }) { "timestamps.size: ${timestamps.size}, values sizes: ${values.map { it.size }}" }
@@ -119,12 +125,17 @@ data class GridMat(val metrics: Array<Metric>, val timestamps: List<Long>, val v
 
     fun dropMetricName(): GridMat {
         val valuesMap = Long2ObjectOpenHashMap<DoubleArray>()
-        val metrics = metrics.map { it.filterWithout(Metric.nameLabel) }.toMutableList()
+        val metrics = metrics.map { it.filterWithout(true) }.toMutableList()
         metrics.forEachIndexed { index, metric ->
             valuesMap[metric.fingerprint()] = values[index]
         }
         metrics.sortBy { it.fingerprint() }
-        return GridMat(metrics.toTypedArray(), timestamps, metrics.map { valuesMap[it.fingerprint()] })
+        return GridMat(metrics.toTypedArray(), timestamps, metrics.map { valuesMap[it.fingerprint()] }, offset)
+    }
+
+    fun mapRows(fn: (Metric, List<Long>, DoubleArray) -> DoubleArray): GridMat {
+        val mappedValues = values.mapIndexed { index, doubles -> fn(metrics[index], timestamps, doubles) }
+        return GridMat(metrics, timestamps, mappedValues, offset)
     }
 
     override fun toString(): String {
@@ -166,7 +177,7 @@ data class GridMat(val metrics: Array<Metric>, val timestamps: List<Long>, val v
                 retMetrics.add(metrics[i])
             }
         }
-        return GridMat(retMetrics.toTypedArray(), timestamps, retValues)
+        return GridMat(retMetrics.toTypedArray(), timestamps, retValues, offset)
     }
 
     fun rows(): MatrixRowIterator {
@@ -207,15 +218,15 @@ data class GridMat(val metrics: Array<Metric>, val timestamps: List<Long>, val v
         /**
          * Simply joins series
          */
-        fun concatSeries(series: List<Series>, frames: List<Long>): GridMat {
+        fun concatSeries(series: List<Series>, frames: List<Long>, offset: Long = 0L): GridMat {
             val metrics = Array(series.size) { series[it].metric }
             val values = series.map { it.values }
-            return GridMat(metrics, frames, values)
+            return GridMat(metrics, frames, values, offset)
         }
 
-        fun of(frames: List<Long>, vararg series: Pair<Metric, DoubleArray>): GridMat {
+        fun of(frames: List<Long>, offset: Long = 0L, vararg series: Pair<Metric, DoubleArray>): GridMat {
             val sortedSels = series.sortedBy { it.first.fingerprint() }
-            return GridMat(sortedSels.map { it.first }.toTypedArray(), frames, sortedSels.map { it.second })
+            return GridMat(sortedSels.map { it.first }.toTypedArray(), frames, sortedSels.map { it.second }, offset)
         }
     }
 }

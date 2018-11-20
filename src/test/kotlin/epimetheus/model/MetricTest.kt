@@ -29,7 +29,7 @@ class MetricTest {
         val m1 = Metric.of("a", "foo" to "bar", "hoge" to "fuga")
         val m2 = Metric.of("a", "hoge" to "fuga")
         assertEquals(m2, m1.filterOn(Metric.nameLabel, "hoge"))
-        assertEquals(m2, m1.filterWithout("foo"))
+        assertEquals(m2, m1.filterWithout(false, "foo"))
     }
 
     @Test

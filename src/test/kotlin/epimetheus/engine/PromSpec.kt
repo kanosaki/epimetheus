@@ -242,17 +242,4 @@ object PromSpecTests {
             }
         }
     }
-
-    @TestFactory
-    fun fromPrometheusOne(): Collection<DynamicTest> {
-        val res = PromSpecTests::class.java.getResource("promspec/prometheus")
-        val files = File(res.path).listFiles()
-        return files.filter { it.name == "selectors.test" }.map {
-            it.inputStream().use { input ->
-                val lines = IOUtils.readLines(input, Charsets.UTF_8)
-                        .map { it.trim() }
-                DynamicTest.dynamicTest(it.name, PromSpec(lines))
-            }
-        }
-    }
 }
