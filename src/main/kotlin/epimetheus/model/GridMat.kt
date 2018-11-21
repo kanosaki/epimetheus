@@ -1,5 +1,7 @@
 package epimetheus.model
 
+import epimetheus.EpimetheusException
+import epimetheus.pkg.promql.PromQLException
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap
 import tech.tablesaw.api.StringColumn
 import tech.tablesaw.api.Table
@@ -227,6 +229,21 @@ data class GridMat(val metrics: Array<Metric>, val timestamps: List<Long>, val v
         fun of(frames: List<Long>, offset: Long = 0L, vararg series: Pair<Metric, DoubleArray>): GridMat {
             val sortedSels = series.sortedBy { it.first.fingerprint() }
             return GridMat(sortedSels.map { it.first }.toTypedArray(), frames, sortedSels.map { it.second }, offset)
+        }
+
+        fun withSortting(originalMetrics: List<Metric>, timestamps: List<Long>, values: List<DoubleArray>): GridMat {
+            assert(originalMetrics.size == values.size)
+            val metrics = originalMetrics.toMutableList()
+            val map = Long2ObjectOpenHashMap<DoubleArray>(metrics.size)
+            for (i in 0 until metrics.size) {
+                val fp = metrics[i].fingerprint()
+                if (map.containsKey(fp)) {
+                    throw EpimetheusException("vector cannot contain same metric: duplicated ${metrics[i]}")
+                }
+                map[fp] = values[i]
+            }
+            metrics.sortBy { it.fingerprint() }
+            return GridMat(metrics.toTypedArray(), timestamps, metrics.map { map[it.fingerprint()]!! })
         }
     }
 }

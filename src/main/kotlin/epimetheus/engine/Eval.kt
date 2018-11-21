@@ -1,6 +1,7 @@
 package epimetheus.engine
 
 import epimetheus.model.Scalar
+import epimetheus.model.StringValue
 import epimetheus.model.TimeFrames
 import epimetheus.model.Value
 import epimetheus.pkg.promql.*
@@ -34,6 +35,7 @@ class DefaultEvalNode(override val top: Eval, val parent: EvalNode?) : EvalNode 
         // TODO: optimize
         val res = when (ast) {
             is NumberLiteral -> Scalar(ast.value)
+            is StringLiteral -> StringValue(ast.value)
             is InstantSelector -> {
                 top.storage.collectInstant(ast.matcher, top.frames, ast.offset.toMillis())
             }

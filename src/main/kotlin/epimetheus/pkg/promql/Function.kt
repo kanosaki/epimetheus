@@ -1,9 +1,12 @@
 package epimetheus.pkg.promql
 
+import epimetheus.EpimetheusException
 import epimetheus.engine.EvalNode
 import epimetheus.model.*
+import epimetheus.pkg.textparse.PromQLParser
 import java.time.YearMonth
 import java.util.*
+import java.util.regex.PatternSyntaxException
 
 
 data class Function(
@@ -19,11 +22,7 @@ data class Function(
             throw PromQLException("wrong number of arguments at function '$name' expected ${argTypes.size} but got ${vals.size}")
         }
         try {
-            val ret = this.body(vals, args, node)
-            return when (ret) {
-                is GridMat -> ret.dropMetricName()
-                else -> ret
-            }
+            return this.body(vals, args, node)
         } catch (iex: ClassCastException) {
             throw PromQLException("wrong type of arguments at function '$name' expected ${this.argTypes} but got ${vals.map { it.javaClass }} $iex")
         }
@@ -80,7 +79,30 @@ data class Function(
                     resultValue /= (m.windowSize.toDouble() / 1000.0)
                 }
                 resultValue
+            }.dropMetricName()
+        }
+
+        private fun linearRegression(vs: DoubleArray, ts: LongArray, interceptTime: Long): DoubleArray {
+            var n = 0.0
+            var sumX = 0.0
+            var sumY = 0.0
+            var sumXY = 0.0
+            var sumX2 = 0.0
+            for (i in 0 until vs.size) {
+                val x = (ts[i] - interceptTime) / 1000.0
+                n += 1.0
+                sumY += vs[i]
+                sumX += x
+                sumXY += x * vs[i]
+                sumX2 += x * x
             }
+            val covXY = sumXY - sumX * sumY / n
+            val varX = sumX2 - sumX * sumX / n
+
+            val slope = covXY / varX
+            val intercept = sumY / n - slope * sumX / n
+
+            return doubleArrayOf(slope, intercept)
         }
 
         private fun instantValue(args: List<Value>, node: EvalNode, isRate: Boolean): GridMat {
@@ -106,7 +128,7 @@ data class Function(
 
                     resultValue
                 }
-            }
+            }.dropMetricName()
         }
 
         private fun timeConvertUtil(calFlag: Int): (List<Value>, List<Expression>, EvalNode) -> Value {
@@ -163,7 +185,7 @@ data class Function(
                     val m = vals[0] as RangeGridMat
                     m.applyUnifyFn { _, _, _, vs ->
                         vs.sum() / vs.size
-                    }
+                    }.dropMetricName()
                 },
                 Function("ceil") { vals, _, node ->
                     simpleFn(vals[0] as GridMat, node, Math::ceil)
@@ -176,14 +198,14 @@ data class Function(
                             else -> {
                                 var ctr = 0
                                 for (i in 1 until vs.size) {
-                                    if (vs[i] != vs[i - 1]) {
+                                    if (vs[i] != vs[i - 1] && !(vs[i].isNaN() && vs[i - 1].isNaN())) {
                                         ctr += 1
                                     }
                                 }
                                 ctr.toDouble()
                             }
                         }
-                    }
+                    }.dropMetricName()
                 },
                 Function("clamp_max") { vals, _, node ->
                     val m = vals[0] as GridMat
@@ -205,7 +227,7 @@ data class Function(
                             }
                         }
                         ctr.toDouble()
-                    }
+                    }.dropMetricName()
                 },
                 Function("days_in_month", variadic = true) { vals, _, node ->
                     val cal = node.locale()
@@ -234,7 +256,13 @@ data class Function(
                 Function("delta", listOf(ValueType.Matrix)) { vals, args, node ->
                     extrapolatedRate(vals, args, node, false, false)
                 },
-                Function("deriv", listOf(ValueType.Matrix)) { vals, _, _ -> TODO() },
+                Function("deriv", listOf(ValueType.Matrix)) { vals, _, _ ->
+                    val m = vals[0] as RangeGridMat
+                    m.applyUnifyFn { m, ts, timestamps, values ->
+                        val res = linearRegression(values, timestamps, timestamps[0])
+                        res[0] // slope
+                    }.dropMetricName()
+                },
                 Function("exp") { vals, _, node ->
                     simpleFn(vals[0] as GridMat, node, Math::exp)
                 },
@@ -253,7 +281,47 @@ data class Function(
                 Function("irate", listOf(ValueType.Matrix)) { vals, _, node ->
                     instantValue(vals, node, true)
                 },
-                Function("label_replace", listOf(ValueType.Vector, ValueType.String, ValueType.String, ValueType.String, ValueType.String)) { vals, _, _ -> TODO() },
+                Function("label_replace", listOf(ValueType.Vector, ValueType.String, ValueType.String, ValueType.String, ValueType.String)) { vals, _, _ ->
+                    val m = vals[0] as GridMat
+                    val dst = vals[1] as StringValue
+                    val repl = vals[2] as StringValue
+                    val src = vals[3] as StringValue
+                    val regexStr = vals[4] as StringValue
+                    try {
+                        val replacePat = Regex("""\$(\d+)""")
+                        val pat = Regex(regexStr.value)
+                        val replacedMetrics = m.metrics.map {
+                            val srcVal = it.m[src.value] ?: ""
+                            val match = pat.matchEntire(srcVal)
+                            if (match == null) {
+                                return@map it
+                            } else {
+                                val dstVal = replacePat.replace(repl.value) { mr ->
+                                    val g0 = mr.groups[1]!!
+                                    val replIndex = g0.value.toInt()
+                                    match.groups[replIndex]?.value ?: ""
+                                }
+                                val newMet = it.m.toSortedMap() // copy needs here
+                                if (!Utils.isValidLabelName(dst.value)) {
+                                    throw PromQLException("${dst.value} is invalid as a label")
+                                }
+                                if (dstVal.isEmpty()) {
+                                    newMet.remove(dst.value)
+                                } else {
+                                    newMet[dst.value] = dstVal
+                                }
+                                return@map Metric(newMet)
+                            }
+                        }
+                        try {
+                            GridMat.withSortting(replacedMetrics, m.timestamps, m.values)
+                        } catch (e: EpimetheusException) {
+                            throw PromQLException(e.message)
+                        }
+                    } catch (pex: PatternSyntaxException) {
+                        throw PromQLException("invalid regex at label_replace: ${pex.message}")
+                    }
+                },
                 Function("label_join", listOf(ValueType.Vector, ValueType.String, ValueType.String, ValueType.String), variadic = true) { vals, _, _ -> TODO() },
                 Function("ln") { vals, _, node ->
                     simpleFn(vals[0] as GridMat, node, Math::log)
@@ -274,7 +342,7 @@ data class Function(
                         } else {
                             vs.max()!!
                         }
-                    }
+                    }.dropMetricName()
                 },
                 Function("min_over_time", listOf(ValueType.Matrix)) { vals, _, node ->
                     val m = vals[0] as RangeGridMat
@@ -284,11 +352,20 @@ data class Function(
                         } else {
                             vs.min()!!
                         }
-                    }
+                    }.dropMetricName()
                 },
                 Function("minute", variadic = true, body = timeConvertUtil(Calendar.MINUTE)),
                 Function("month", variadic = true, body = timeConvertUtil(Calendar.MONTH)),
-                Function("predict_linear", listOf(ValueType.Matrix, ValueType.Scalar)) { vals, _, _ -> TODO() },
+                Function("predict_linear", listOf(ValueType.Matrix, ValueType.Scalar)) { vals, _, _ ->
+                    val m = vals[0] as RangeGridMat
+                    val s = vals[1] as Scalar
+                    m.applyUnifyFn { m, ts, timestamps, values ->
+                        val res = linearRegression(values, timestamps, ts)
+                        val slope = res[0]
+                        val intercept = res[1]
+                        slope * s.value + intercept
+                    }.dropMetricName()
+                },
                 Function("quantile_over_time", listOf(ValueType.Scalar, ValueType.Matrix)) { vals, _, _ -> TODO() },
                 Function("rate", listOf(ValueType.Matrix)) { vals, args, node ->
                     extrapolatedRate(vals, args, node, true, true)
@@ -308,7 +385,7 @@ data class Function(
                                 leapCtr.toDouble()
                             }
                         }
-                    }
+                    }.dropMetricName()
                 },
                 Function("round", variadic = true) { vals, _, node ->
                     val m = vals[0] as GridMat
@@ -329,11 +406,9 @@ data class Function(
                 Function("scalar", returnType = ValueType.Scalar, variadic = true) { vals, _, _ -> TODO() },
                 Function("sort") { vals, _, _ -> TODO() },
                 Function("sort_desc") { vals, _, _ -> TODO() },
-                Function("sqrt") { vals, _, _ ->
+                Function("sqrt") { vals, _, node ->
                     val m = vals[0] as GridMat
-                    m.mapRows { met, ts, vs ->
-                        DoubleArray(vs.size) { Math.sqrt(vs[it]) }
-                    }
+                    simpleFn(m, node, Math::sqrt)
                 },
                 Function("stddev_over_time", listOf(ValueType.Matrix)) { vals, _, _ -> TODO() },
                 Function("stdvar_over_time", listOf(ValueType.Matrix)) { vals, _, _ -> TODO() },
@@ -341,7 +416,7 @@ data class Function(
                     val m = vals[0] as RangeGridMat
                     m.applyUnifyFn { _, _, _, vs ->
                         vs.sum()
-                    }
+                    }.dropMetricName()
                 },
                 Function("time", listOf(), returnType = ValueType.Scalar) { vals, _, node ->
                     Scalar(node.frames.first().toDouble() / 1000.0)
@@ -350,7 +425,7 @@ data class Function(
                     val m = vals[0] as GridMat
                     m.mapRows { met, ts, vs ->
                         DoubleArray(vs.size) { ts[it].toDouble() / 1000.0 } // ms --> s
-                    }
+                    }.dropMetricName()
 
                 },
                 Function("vector", listOf(ValueType.Scalar)) { vals, _, node ->

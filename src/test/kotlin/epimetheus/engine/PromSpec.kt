@@ -217,6 +217,20 @@ class PromSpec(val lines: List<String>) : Executable {
                         interpreter = Interpreter(storage)
                         ctx = SpecContext(storage, interpreter)
                     }
+                    is EvalCmd -> {
+                        if (it.fail) {
+                            try {
+                                it.eval(ctx)
+                                throw RuntimeException("not failed(should throw PromQLException) at eval_fail")
+                            } catch (_: PromQLException) {
+                            } catch (e: java.lang.AssertionError) {
+                                e.printStackTrace()
+                                throw RuntimeException("not failed(but AssertionError) at eval_fail")
+                            }
+                        } else {
+                            it.eval(ctx)
+                        }
+                    }
                     else -> it.eval(ctx)
                 }
             } catch (ex: Throwable) {
