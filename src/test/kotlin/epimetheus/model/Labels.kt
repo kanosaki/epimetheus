@@ -26,7 +26,7 @@ class LabelMatcherTest {
 class MetricMatcherTest {
     @Test
     fun testMetricBasicMatch() {
-        val basic = MetricMatcher(mapOf(
+        val basic = MetricMatcher(listOf(
                 "foo" to LabelMatcher(LabelMatchType.Eq, "bar"),
                 "hoge" to LabelMatcher(LabelMatchType.Neq, "fuga")
         ))

@@ -20,16 +20,18 @@ data class LabelMatcher(val lmt: LabelMatchType, val value: String) {
     }
 }
 
-data class MetricMatcher(val matchers: Map<String, LabelMatcher>) {
+data class MetricMatcher(val matchers: List<Pair<String, LabelMatcher>>) {
+    private val namePat = matchers.firstOrNull { it.first == Metric.nameLabel }
+
     fun namePattern(): LabelMatcher? {
-        return matchers[Metric.nameLabel]
+        return namePat?.second
     }
 
     fun matches(met: Metric, ignoreName: Boolean = false): Boolean {
         val m = met.m
         return matchers.all {
-            (ignoreName && it.key == Metric.nameLabel) || // pass name label if ignoreName is true
-                    m.containsKey(it.key) && it.value.matches(m[it.key]!!)
+            (ignoreName && it.first == Metric.nameLabel) || // pass name label if ignoreName is true
+                    m.containsKey(it.first) && it.second.matches(m[it.first]!!)
         }
     }
 
@@ -40,7 +42,7 @@ data class MetricMatcher(val matchers: Map<String, LabelMatcher>) {
     companion object {
         fun nameMatch(name: String, regex: Boolean = false): MetricMatcher {
             val lmt = if (regex) LabelMatchType.Match else LabelMatchType.Eq
-            return MetricMatcher(mapOf(Metric.nameLabel to LabelMatcher(lmt, name)))
+            return MetricMatcher(listOf(Metric.nameLabel to LabelMatcher(lmt, name)))
         }
     }
 }

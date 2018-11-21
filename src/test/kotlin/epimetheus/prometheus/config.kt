@@ -16,7 +16,7 @@ class PrometheusConfigTest {
                 metrics_path: /metpath
                 honor_labels: true
                 scheme: https
-                params:
+                args:
                   x-foo: ["hoge"]
                 static_configs:
                   - targets:

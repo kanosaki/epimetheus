@@ -1,5 +1,6 @@
 package epimetheus.pkg.promql
 
+import epimetheus.model.Metric
 import epimetheus.pkg.textparse.PromQLLexer
 import epimetheus.pkg.textparse.PromQLParser
 import epimetheus.pkg.textparse.PromQLParserBaseVisitor

@@ -60,7 +60,12 @@ class ParseTest {
                                 listOf(
                                         LabelMatch("a", "!~", str("b.*"))
                                 ), Duration.ofHours(2), Duration.ofDays(1)),
-
+                "{__name__=~\".+\"}" to
+                        InstantSelector(
+                                "",
+                                listOf(
+                                        LabelMatch("__name__", "=~", str(".+"))
+                                ), Duration.ZERO),
                 "foo + bar" to
                         bin("+", vec("foo"), vec("bar")),
 

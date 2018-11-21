@@ -74,7 +74,7 @@ data class ScrapeConfig(
         @JsonProperty("scheme")
         val scheme: String?,
 
-        @JsonProperty("params")
+        @JsonProperty("args")
         val params: Map<String, List<String>>?,
 
         @JsonProperty("static_configs")

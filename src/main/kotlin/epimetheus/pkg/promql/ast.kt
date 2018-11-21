@@ -52,10 +52,16 @@ interface Selector : Expression {
 
 abstract class SelectorBase : Selector {
     val matcher: MetricMatcher by lazy {
-        MetricMatcher(mapOf(
-                Metric.nameLabel to LabelMatcher(LabelMatchType.Match, name),
-                *labels.map { it.name to it.toMatcher() }.toTypedArray()
-        ))
+        if (name == "" || labels.any { it.name == Metric.nameLabel }) {
+            MetricMatcher(listOf(
+                    *labels.map { it.name to it.toMatcher() }.toTypedArray()
+            ))
+        } else {
+            MetricMatcher(listOf(
+                    Metric.nameLabel to LabelMatcher(LabelMatchType.Match, name),
+                    *labels.map { it.name to it.toMatcher() }.toTypedArray()
+            ))
+        }
     }
 
     fun selectorTostring(): String {
@@ -98,17 +104,17 @@ data class BinaryCall(val op: BinaryOp, val lhs: Expression, val rhs: Expression
     }
 }
 
-data class FunctionCall(val fn: Function, val params: List<Expression>) : Expression {
+data class FunctionCall(val fn: Function, val args: List<Expression>) : Expression {
     init {
         // TODO: Add argument validation
     }
 
     override fun toString(): String {
-        return "${fn.name}(${params.joinToString(",")})"
+        return "${fn.name}(${args.joinToString(",")})"
     }
 
     override fun children(): List<Expression> {
-        return params
+        return args
     }
 }
 

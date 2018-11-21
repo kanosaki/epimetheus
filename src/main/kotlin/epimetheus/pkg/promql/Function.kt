@@ -12,20 +12,20 @@ data class Function(
         override val returnType: ValueType = ValueType.Vector,
         override val variadic: Boolean = false,
         val isDropsMetricName: Boolean = false,
-        val body: (List<Value>, EvalNode) -> Value) : Applicative {
+        val body: (List<Value>, List<Expression>, EvalNode) -> Value) : Applicative {
 
-    fun call(params: List<Value>, node: EvalNode): Value {
-        if (!variadic && params.size != argTypes.size) {
-            throw PromQLException("wrong number of arguments at function '$name' expected ${argTypes.size} but got ${params.size}")
+    fun call(vals: List<Value>, args: List<Expression>, node: EvalNode): Value {
+        if (!variadic && vals.size != argTypes.size) {
+            throw PromQLException("wrong number of arguments at function '$name' expected ${argTypes.size} but got ${vals.size}")
         }
         try {
-            val ret = this.body(params, node)
+            val ret = this.body(vals, args, node)
             return when (ret) {
                 is GridMat -> ret.dropMetricName()
                 else -> ret
             }
         } catch (iex: ClassCastException) {
-            throw PromQLException("wrong type of arguments at function '$name' expected ${this.argTypes} but got ${params.map { it.javaClass }}")
+            throw PromQLException("wrong type of arguments at function '$name' expected ${this.argTypes} but got ${vals.map { it.javaClass }} $iex")
         }
     }
 
@@ -33,8 +33,8 @@ data class Function(
     // TODO: UDF(User Defined Function) support?
     companion object {
 
-        private fun extrapolatedRate(args: List<Value>, node: EvalNode, isCounter: Boolean, isRate: Boolean): GridMat {
-            val m = args[0] as RangeGridMat
+        private fun extrapolatedRate(vals: List<Value>, args: List<Expression>, node: EvalNode, isCounter: Boolean, isRate: Boolean): GridMat {
+            val m = vals[0] as RangeGridMat
             return m.applyUnifyFn { _, ts, timestamps, values ->
                 val rangeStart = ts - m.windowSize - m.offset
                 val rangeEnd = ts - m.offset
@@ -109,16 +109,16 @@ data class Function(
             }
         }
 
-        private fun timeConvertUtil(calFlag: Int): (List<Value>, EvalNode) -> Value {
-            return { args, node ->
+        private fun timeConvertUtil(calFlag: Int): (List<Value>, List<Expression>, EvalNode) -> Value {
+            return { vals, _, node ->
                 val cal = node.locale()
-                if (args.isEmpty()) {
+                if (vals.isEmpty()) {
                     val ts = node.frames.toList()
                     cal.timeInMillis = System.currentTimeMillis()
                     val v = cal.get(calFlag).toDouble()
                     GridMat.of(ts, 0L, Metric.empty to DoubleArray(ts.size) { v })
                 } else {
-                    val m = args[0] as GridMat
+                    val m = vals[0] as GridMat
                     m.mapRows { met, ts, vs ->
                         DoubleArray(vs.size) {
                             val t = vs[it]
@@ -137,21 +137,39 @@ data class Function(
         }
 
         val builtins = listOf(
-                Function("abs") { args, node ->
-                    simpleFn(args[0] as GridMat, node, Math::abs)
+                Function("abs") { vals, _, node ->
+                    simpleFn(vals[0] as GridMat, node, Math::abs)
                 },
-                Function("absent") { _, _ -> TODO() },
-                Function("avg_over_time", listOf(ValueType.Matrix)) { args, _ ->
-                    val m = args[0] as RangeGridMat
+                Function("absent") { vals, args, node ->
+                    val m = vals[0] as GridMat
+                    if (m.metrics.isNotEmpty()) {
+                        return@Function GridMat(arrayOf(), node.frames, listOf())
+                    }
+                    val a0 = args[0]
+                    val newMet = if (a0 is InstantSelector) {
+                        val resSel = a0.matcher.matchers
+                                .filter { it.second.lmt == LabelMatchType.Eq && it.second.value != Metric.nameLabel }
+                                .map { it.first to it.second.value }
+                                .toMap()
+                                .toSortedMap()
+                        Metric(resSel)
+                    } else {
+                        Metric.empty
+                    }
+                    GridMat(arrayOf(newMet), node.frames, listOf(DoubleArray(node.frames.size) { 1.0 }))
+
+                },
+                Function("avg_over_time", listOf(ValueType.Matrix)) { vals, _, _ ->
+                    val m = vals[0] as RangeGridMat
                     m.applyUnifyFn { _, _, _, vs ->
                         vs.sum() / vs.size
                     }
                 },
-                Function("ceil") { args, node ->
-                    simpleFn(args[0] as GridMat, node, Math::ceil)
+                Function("ceil") { vals, _, node ->
+                    simpleFn(vals[0] as GridMat, node, Math::ceil)
                 },
-                Function("changes", listOf(ValueType.Matrix)) { args, _ ->
-                    val m = args[0] as RangeGridMat
+                Function("changes", listOf(ValueType.Matrix)) { vals, _, _ ->
+                    val m = vals[0] as RangeGridMat
                     m.applyUnifyFn { _, _, _, vs ->
                         when {
                             vs.size < 2 -> 0.0
@@ -167,18 +185,18 @@ data class Function(
                         }
                     }
                 },
-                Function("clamp_max") { args, node ->
-                    val m = args[0] as GridMat
-                    val mx = args[1] as Scalar
+                Function("clamp_max") { vals, _, node ->
+                    val m = vals[0] as GridMat
+                    val mx = vals[1] as Scalar
                     simpleFn(m, node) { Math.min(it, mx.value) }
                 },
-                Function("clamp_min") { args, node ->
-                    val m = args[0] as GridMat
-                    val mx = args[1] as Scalar
+                Function("clamp_min") { vals, _, node ->
+                    val m = vals[0] as GridMat
+                    val mx = vals[1] as Scalar
                     simpleFn(m, node) { Math.max(it, mx.value) }
                 },
-                Function("count_over_time", listOf(ValueType.Matrix)) { args, node ->
-                    val m = args[0] as RangeGridMat
+                Function("count_over_time", listOf(ValueType.Matrix)) { vals, _, node ->
+                    val m = vals[0] as RangeGridMat
                     m.applyUnifyFn { _, _, _, vs ->
                         var ctr = 0
                         for (v in vs) {
@@ -189,16 +207,16 @@ data class Function(
                         ctr.toDouble()
                     }
                 },
-                Function("days_in_month", variadic = true) { args, node ->
+                Function("days_in_month", variadic = true) { vals, _, node ->
                     val cal = node.locale()
-                    if (args.isEmpty()) {
+                    if (vals.isEmpty()) {
                         val ts = node.frames.toList()
                         cal.timeInMillis = System.currentTimeMillis()
                         val ym = YearMonth.of(cal.get(Calendar.YEAR), cal.get(Calendar.MONTH))
                         val v = ym.lengthOfMonth().toDouble()
                         GridMat.of(ts, 0L, Metric.empty to DoubleArray(ts.size) { v })
                     } else {
-                        val m = args[0] as GridMat
+                        val m = vals[0] as GridMat
                         m.mapRows { met, ts, vs ->
                             DoubleArray(vs.size) {
                                 val t = vs[it]
@@ -213,48 +231,70 @@ data class Function(
                 Function("days_of_week", variadic = true, body = timeConvertUtil(Calendar.DAY_OF_WEEK)),
                 Function("day_of_month", variadic = true, body = timeConvertUtil(Calendar.DAY_OF_MONTH)),
                 Function("day_of_week", variadic = true, body = timeConvertUtil(Calendar.DAY_OF_WEEK)),
-                Function("delta", listOf(ValueType.Matrix)) { args, node ->
-                    extrapolatedRate(args, node, false, false)
+                Function("delta", listOf(ValueType.Matrix)) { vals, args, node ->
+                    extrapolatedRate(vals, args, node, false, false)
                 },
-                Function("deriv", listOf(ValueType.Matrix)) { _, _ -> TODO() },
-                Function("exp") { args, node ->
-                    simpleFn(args[0] as GridMat, node, Math::exp)
+                Function("deriv", listOf(ValueType.Matrix)) { vals, _, _ -> TODO() },
+                Function("exp") { vals, _, node ->
+                    simpleFn(vals[0] as GridMat, node, Math::exp)
                 },
-                Function("floor") { args, node ->
-                    simpleFn(args[0] as GridMat, node, Math::floor)
+                Function("floor") { vals, _, node ->
+                    simpleFn(vals[0] as GridMat, node, Math::floor)
                 },
-                Function("histogram_quantile", listOf(ValueType.Scalar, ValueType.Vector)) { _, _ -> TODO() },
-                Function("holt_winters", listOf(ValueType.Matrix, ValueType.Scalar, ValueType.Scalar)) { _, _ -> TODO() },
+                Function("histogram_quantile", listOf(ValueType.Scalar, ValueType.Vector)) { vals, _, _ -> TODO() },
+                Function("holt_winters", listOf(ValueType.Matrix, ValueType.Scalar, ValueType.Scalar)) { vals, _, _ -> TODO() },
                 Function("hour", variadic = true, body = timeConvertUtil(Calendar.HOUR_OF_DAY)),
-                Function("idelta", listOf(ValueType.Matrix)) { args, node ->
-                    instantValue(args, node, false)
+                Function("idelta", listOf(ValueType.Matrix)) { vals, _, node ->
+                    instantValue(vals, node, false)
                 },
-                Function("increase", listOf(ValueType.Matrix)) { args, node ->
-                    extrapolatedRate(args, node, true, false)
+                Function("increase", listOf(ValueType.Matrix)) { vals, args, node ->
+                    extrapolatedRate(vals, args, node, true, false)
                 },
-                Function("irate", listOf(ValueType.Matrix)) { args, node ->
-                    instantValue(args, node, true)
+                Function("irate", listOf(ValueType.Matrix)) { vals, _, node ->
+                    instantValue(vals, node, true)
                 },
-                Function("label_replace", listOf(ValueType.Vector, ValueType.String, ValueType.String, ValueType.String, ValueType.String)) { _, _ -> TODO() },
-                Function("label_join", listOf(ValueType.Vector, ValueType.String, ValueType.String, ValueType.String), variadic = true) { _, _ -> TODO() },
-                Function("ln") { args, node ->
-                    simpleFn(args[0] as GridMat, node, Math::log)
+                Function("label_replace", listOf(ValueType.Vector, ValueType.String, ValueType.String, ValueType.String, ValueType.String)) { vals, _, _ -> TODO() },
+                Function("label_join", listOf(ValueType.Vector, ValueType.String, ValueType.String, ValueType.String), variadic = true) { vals, _, _ -> TODO() },
+                Function("ln") { vals, _, node ->
+                    simpleFn(vals[0] as GridMat, node, Math::log)
                 },
-                Function("log10") { args, node ->
-                    simpleFn(args[0] as GridMat, node, Math::log10)
+                Function("log10") { vals, _, node ->
+                    simpleFn(vals[0] as GridMat, node, Math::log10)
                 },
-                Function("log2") { _, _ -> TODO() },
-                Function("max_over_time", listOf(ValueType.Matrix)) { _, _ -> TODO() },
-                Function("min_over_time", listOf(ValueType.Matrix)) { _, _ -> TODO() },
+                Function("log2") { vals, _, node ->
+                    simpleFn(vals[0] as GridMat, node) {
+                        Math.log(it) / Math.log(2.0)
+                    }
+                },
+                Function("max_over_time", listOf(ValueType.Matrix)) { vals, _, node ->
+                    val m = vals[0] as RangeGridMat
+                    m.applyUnifyFn { _, _, _, vs ->
+                        if (vs.isEmpty()) {
+                            Mat.StaleValue
+                        } else {
+                            vs.max()!!
+                        }
+                    }
+                },
+                Function("min_over_time", listOf(ValueType.Matrix)) { vals, _, node ->
+                    val m = vals[0] as RangeGridMat
+                    m.applyUnifyFn { _, _, _, vs ->
+                        if (vs.isEmpty()) {
+                            Mat.StaleValue
+                        } else {
+                            vs.min()!!
+                        }
+                    }
+                },
                 Function("minute", variadic = true, body = timeConvertUtil(Calendar.MINUTE)),
                 Function("month", variadic = true, body = timeConvertUtil(Calendar.MONTH)),
-                Function("predict_linear", listOf(ValueType.Matrix, ValueType.Scalar)) { _, _ -> TODO() },
-                Function("quantile_over_time", listOf(ValueType.Scalar, ValueType.Matrix)) { _, _ -> TODO() },
-                Function("rate", listOf(ValueType.Matrix)) { args, node ->
-                    extrapolatedRate(args, node, true, true)
+                Function("predict_linear", listOf(ValueType.Matrix, ValueType.Scalar)) { vals, _, _ -> TODO() },
+                Function("quantile_over_time", listOf(ValueType.Scalar, ValueType.Matrix)) { vals, _, _ -> TODO() },
+                Function("rate", listOf(ValueType.Matrix)) { vals, args, node ->
+                    extrapolatedRate(vals, args, node, true, true)
                 },
-                Function("resets", listOf(ValueType.Matrix)) { args, _ ->
-                    val m = args[0] as RangeGridMat
+                Function("resets", listOf(ValueType.Matrix)) { vals, _, _ ->
+                    val m = vals[0] as RangeGridMat
                     m.applyUnifyFn { _, _, _, vs ->
                         when {
                             vs.size < 2 -> 0.0
@@ -270,38 +310,51 @@ data class Function(
                         }
                     }
                 },
-                Function("round") { args, node ->
-                    simpleFn(args[0] as GridMat, node) { Math.round(it).toDouble() }
+                Function("round", variadic = true) { vals, _, node ->
+                    val m = vals[0] as GridMat
+                    val toNearest = if (vals.size >= 2) {
+                        val a1 = vals[1]
+                        when (a1) {
+                            is Scalar -> a1.value
+                            else -> throw PromQLException("scalar expected for round second argument, but got ${a1.javaClass}")
+                        }
+                    } else {
+                        1.0
+                    }
+                    val toNearestInverse = 1.0 / toNearest
+                    simpleFn(m, node) {
+                        Math.floor(it * toNearestInverse + 0.5) / toNearestInverse
+                    }
                 },
-                Function("scalar", returnType = ValueType.Scalar, variadic = true) { _, _ -> TODO() },
-                Function("sort") { _, _ -> TODO() },
-                Function("sort_desc") { _, _ -> TODO() },
-                Function("sqrt") { args, _ ->
-                    val m = args[0] as GridMat
+                Function("scalar", returnType = ValueType.Scalar, variadic = true) { vals, _, _ -> TODO() },
+                Function("sort") { vals, _, _ -> TODO() },
+                Function("sort_desc") { vals, _, _ -> TODO() },
+                Function("sqrt") { vals, _, _ ->
+                    val m = vals[0] as GridMat
                     m.mapRows { met, ts, vs ->
                         DoubleArray(vs.size) { Math.sqrt(vs[it]) }
                     }
                 },
-                Function("stddev_over_time", listOf(ValueType.Matrix)) { _, _ -> TODO() },
-                Function("stdvar_over_time", listOf(ValueType.Matrix)) { _, _ -> TODO() },
-                Function("sum_over_time", listOf(ValueType.Matrix)) { args, _ ->
-                    val m = args[0] as RangeGridMat
+                Function("stddev_over_time", listOf(ValueType.Matrix)) { vals, _, _ -> TODO() },
+                Function("stdvar_over_time", listOf(ValueType.Matrix)) { vals, _, _ -> TODO() },
+                Function("sum_over_time", listOf(ValueType.Matrix)) { vals, _, _ ->
+                    val m = vals[0] as RangeGridMat
                     m.applyUnifyFn { _, _, _, vs ->
-                        vs.sum() / vs.size
+                        vs.sum()
                     }
                 },
-                Function("time", listOf(), returnType = ValueType.Scalar) { _, _ ->
-                    Scalar(System.currentTimeMillis().toDouble() / 1000.0) // as seconds (UNIX Epoch)
+                Function("time", listOf(), returnType = ValueType.Scalar) { vals, _, node ->
+                    Scalar(node.frames.first().toDouble() / 1000.0)
                 },
-                Function("timestamp") { args, _ ->
-                    val m = args[0] as GridMat
+                Function("timestamp") { vals, _, _ ->
+                    val m = vals[0] as GridMat
                     m.mapRows { met, ts, vs ->
                         DoubleArray(vs.size) { ts[it].toDouble() / 1000.0 } // ms --> s
                     }
 
                 },
-                Function("vector", listOf(ValueType.Scalar)) { args, node ->
-                    val s = args[0] as Scalar
+                Function("vector", listOf(ValueType.Scalar)) { vals, _, node ->
+                    val s = vals[0] as Scalar
                     val ts = node.frames.toList()
                     GridMat.of(ts, 0L, Metric.empty to DoubleArray(ts.size) { s.value })
                 },
