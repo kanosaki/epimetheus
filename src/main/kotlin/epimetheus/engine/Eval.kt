@@ -6,6 +6,7 @@ import epimetheus.model.TimeFrames
 import epimetheus.model.Value
 import epimetheus.pkg.promql.*
 import epimetheus.storage.Gateway
+import java.time.ZoneId
 import java.util.*
 
 class Eval(val frames: TimeFrames, val storage: Gateway, val tracer: Tracer = Tracer.empty) {
@@ -20,8 +21,8 @@ interface EvalNode {
     val top: Eval
 
     fun evalExpr(ast: Expression, depth: Int): Value
-    fun locale(): Calendar {
-        return Calendar.getInstance()
+    fun zone(): ZoneId {
+        return ZoneId.systemDefault()
     }
 
     val frames: TimeFrames

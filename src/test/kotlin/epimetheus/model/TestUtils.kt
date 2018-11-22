@@ -4,7 +4,7 @@ import kotlin.test.assertEquals
 import kotlin.test.fail
 
 object TestUtils {
-    const val DOUBLE_COMPARE_DELTA = 10e-9
+    const val DOUBLE_COMPARE_DELTA = 1e-6
 
     fun assertValueEquals(m1: Value, m2: Value, allowNonDetComparsion: Boolean = false, prune: Boolean = false, msg: String = "") {
         if (m1 is GridMat && m2 is GridMat) {
@@ -82,7 +82,7 @@ object TestUtils {
     }
 
     fun assertMatEquals(m1: GridMat, m2: GridMat, allowNonDetComparsion: Boolean = false, memo: String = "") {
-        assertEquals(m1.timestamps, m2.timestamps, "Timestamp mismatch $memo")
+        assertEquals(m1.timestamps.toList(), m2.timestamps.toList(), "Timestamp mismatch $memo")
         if (m1.metrics.size != m2.metrics.size) {
             fail("metric number mismatch: : expected: ${m1.metrics.size} != actual: ${m2.metrics.size} $m1 $m2 $memo")
         }

@@ -2,6 +2,7 @@ package epimetheus.storage
 
 import epimetheus.model.*
 import epimetheus.pkg.textparse.ScrapedSample
+import it.unimi.dsi.fastutil.longs.LongArrayList
 import java.util.*
 
 class MockGateway() : Gateway, MetricRegistry {
@@ -40,21 +41,26 @@ class MockGateway() : Gateway, MetricRegistry {
                 .map {
                     val sig = it.fingerprint()
                     val wholeData = datum[sig]!!
+                    val timestamps = LongArrayList()
                     val v = range.map { originalTs ->
                         val ts = originalTs - offset
                         val subMap = wholeData.headMap(ts + 1)
                         if (subMap.isEmpty()) {
+                            timestamps.add(originalTs)
                             Mat.StaleValue
                         } else {
-                            val delta = ts - subMap.lastKey()
+                            val lk = subMap.lastKey()!!
+                            val delta = ts - lk
                             if (delta > 5 * 60 * 1000) {
+                                timestamps.add(originalTs)
                                 Mat.StaleValue
                             } else {
-                                subMap[subMap.lastKey()]!!
+                                timestamps.add(lk)
+                                subMap[lk]!!
                             }
                         }
                     }
-                    Series(it, v.toDoubleArray(), range.toLongArray())
+                    Series(it, v.toDoubleArray(), timestamps.elements())
                 }
                 .sortedBy { it.metric.fingerprint() }
         return GridMat.concatSeries(serieses, range, offset)

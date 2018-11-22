@@ -3,8 +3,12 @@ package epimetheus.pkg.promql
 import epimetheus.EpimetheusException
 import epimetheus.engine.EvalNode
 import epimetheus.model.*
-import epimetheus.pkg.textparse.PromQLParser
+import java.time.Instant
 import java.time.YearMonth
+import java.time.ZoneId
+import java.time.ZonedDateTime
+import java.time.temporal.ChronoField
+import java.time.temporal.TemporalField
 import java.util.*
 import java.util.regex.PatternSyntaxException
 
@@ -131,25 +135,43 @@ data class Function(
             }.dropMetricName()
         }
 
-        private fun timeConvertUtil(calFlag: Int): (List<Value>, List<Expression>, EvalNode) -> Value {
+        private fun timeConvertUtil(field: TemporalField): (List<Value>, List<Expression>, EvalNode) -> Value {
             return { vals, _, node ->
-                val cal = node.locale()
                 if (vals.isEmpty()) {
                     val ts = node.frames.toList()
-                    cal.timeInMillis = System.currentTimeMillis()
-                    val v = cal.get(calFlag).toDouble()
+                    val zdt = ZonedDateTime.ofInstant(Instant.ofEpochSecond(0), ZoneId.of("UTC"))
+                    val v = zdt[field].toDouble()
                     GridMat.of(ts, 0L, Metric.empty to DoubleArray(ts.size) { v })
                 } else {
                     val m = vals[0] as GridMat
                     m.mapRows { met, ts, vs ->
                         DoubleArray(vs.size) {
                             val t = vs[it]
-                            cal.timeInMillis = t.toLong()
-                            cal.get(calFlag).toDouble()
+                            val zdt = ZonedDateTime.ofInstant(Instant.ofEpochSecond(t.toLong()), ZoneId.of("UTC"))
+                            zdt[field].toDouble()
                         }
                     }.dropMetricName()
                 }
             }
+        }
+
+        fun quantile(q: Double, vs: DoubleArray): Double {
+            if (vs.isEmpty()) {
+                return Double.NaN
+            }
+            if (q < 0) {
+                return Double.NEGATIVE_INFINITY
+            }
+            if (q > 1) {
+                return Double.POSITIVE_INFINITY
+            }
+            Arrays.sort(vs)
+            val n = vs.size.toDouble()
+            val rank = q * (n - 1)
+            val lowerIndex = Math.max(0.0, Math.floor(rank))
+            val upperIndex = Math.min(n - 1, lowerIndex + 1)
+            val weight = rank - Math.floor(rank)
+            return vs[lowerIndex.toInt()] * (1 - weight) + vs[upperIndex.toInt()] * weight
         }
 
         private fun simpleFn(m: GridMat, node: EvalNode, fn: (Double) -> Double): Value {
@@ -207,12 +229,12 @@ data class Function(
                         }
                     }.dropMetricName()
                 },
-                Function("clamp_max") { vals, _, node ->
+                Function("clamp_max", listOf(ValueType.Vector, ValueType.Scalar)) { vals, _, node ->
                     val m = vals[0] as GridMat
                     val mx = vals[1] as Scalar
                     simpleFn(m, node) { Math.min(it, mx.value) }
                 },
-                Function("clamp_min") { vals, _, node ->
+                Function("clamp_min", listOf(ValueType.Vector, ValueType.Scalar)) { vals, _, node ->
                     val m = vals[0] as GridMat
                     val mx = vals[1] as Scalar
                     simpleFn(m, node) { Math.max(it, mx.value) }
@@ -230,29 +252,27 @@ data class Function(
                     }.dropMetricName()
                 },
                 Function("days_in_month", variadic = true) { vals, _, node ->
-                    val cal = node.locale()
                     if (vals.isEmpty()) {
                         val ts = node.frames.toList()
-                        cal.timeInMillis = System.currentTimeMillis()
-                        val ym = YearMonth.of(cal.get(Calendar.YEAR), cal.get(Calendar.MONTH))
-                        val v = ym.lengthOfMonth().toDouble()
-                        GridMat.of(ts, 0L, Metric.empty to DoubleArray(ts.size) { v })
+                        val zdt = ZonedDateTime.ofInstant(Instant.ofEpochSecond(0), ZoneId.of("UTC"))
+                        val ym = YearMonth.of(zdt[ChronoField.YEAR], zdt[ChronoField.MONTH_OF_YEAR])
+                        GridMat.of(ts, 0L, Metric.empty to DoubleArray(ts.size) { ym.lengthOfMonth().toDouble() })
                     } else {
                         val m = vals[0] as GridMat
                         m.mapRows { met, ts, vs ->
                             DoubleArray(vs.size) {
                                 val t = vs[it]
-                                cal.timeInMillis = t.toLong()
-                                val ym = YearMonth.of(cal.get(Calendar.YEAR), cal.get(Calendar.MONTH))
+                                val zdt = ZonedDateTime.ofInstant(Instant.ofEpochSecond(t.toLong()), ZoneId.of("UTC"))
+                                val ym = YearMonth.of(zdt[ChronoField.YEAR], zdt[ChronoField.MONTH_OF_YEAR])
                                 ym.lengthOfMonth().toDouble()
                             }
-                        }
+                        }.dropMetricName()
                     }
                 },
-                Function("days_of_month", variadic = true, body = timeConvertUtil(Calendar.DAY_OF_MONTH)),
-                Function("days_of_week", variadic = true, body = timeConvertUtil(Calendar.DAY_OF_WEEK)),
-                Function("day_of_month", variadic = true, body = timeConvertUtil(Calendar.DAY_OF_MONTH)),
-                Function("day_of_week", variadic = true, body = timeConvertUtil(Calendar.DAY_OF_WEEK)),
+                Function("days_of_month", variadic = true, body = timeConvertUtil(ChronoField.DAY_OF_MONTH)),
+                Function("days_of_week", variadic = true, body = timeConvertUtil(ChronoField.DAY_OF_WEEK)),
+                Function("day_of_month", variadic = true, body = timeConvertUtil(ChronoField.DAY_OF_MONTH)),
+                Function("day_of_week", variadic = true, body = timeConvertUtil(ChronoField.DAY_OF_WEEK)),
                 Function("delta", listOf(ValueType.Matrix)) { vals, args, node ->
                     extrapolatedRate(vals, args, node, false, false)
                 },
@@ -270,8 +290,45 @@ data class Function(
                     simpleFn(vals[0] as GridMat, node, Math::floor)
                 },
                 Function("histogram_quantile", listOf(ValueType.Scalar, ValueType.Vector)) { vals, _, _ -> TODO() },
-                Function("holt_winters", listOf(ValueType.Matrix, ValueType.Scalar, ValueType.Scalar)) { vals, _, _ -> TODO() },
-                Function("hour", variadic = true, body = timeConvertUtil(Calendar.HOUR_OF_DAY)),
+                Function("holt_winters", listOf(ValueType.Matrix, ValueType.Scalar, ValueType.Scalar)) { vals, _, _ ->
+                    val m = vals[0] as RangeGridMat
+                    val sf = (vals[1] as Scalar).value // smoothing factor
+                    val tf = (vals[2] as Scalar).value // trend factor
+                    fun calcTrendValues(i: Int, s0: Double, s1: Double, b: Double): Double {
+                        if (i == 0) {
+                            return b
+                        }
+                        val x = tf * (s1 - s0)
+                        val y = (1 - tf) * b
+                        return x + y
+                    }
+                    if (sf <= 0.0 || sf >= 1.0) {
+                        throw PromQLException("invalid smoothing factor. Expected: 0 < sf < 1, got: ${sf}")
+                    }
+                    if (tf <= 0.0 || tf >= 1.0) {
+                        throw PromQLException("invalid trend factor. Expected: 0 < tf < 1, got: ${tf}")
+                    }
+                    m.applyUnifyFn { metric, ts, timestamps, values ->
+                        val l = values.size
+                        if (l < 2) {
+                            return@applyUnifyFn Mat.StaleValue
+                        }
+                        var s0 = 0.0
+                        var s1 = values.first()
+                        var b = values[1] - values[0]
+                        var x = 0.0
+                        var y = 0.0
+                        for (i in 1 until l) {
+                            x = sf * values[i]
+                            b = calcTrendValues(i - 1, s0, s1, b)
+                            y = (1 - sf) * (s1 + b)
+                            s0 = s1
+                            s1 = x + y
+                        }
+                        s1
+                    }.dropMetricName()
+                },
+                Function("hour", variadic = true, body = timeConvertUtil(ChronoField.HOUR_OF_DAY)),
                 Function("idelta", listOf(ValueType.Matrix)) { vals, _, node ->
                     instantValue(vals, node, false)
                 },
@@ -322,7 +379,40 @@ data class Function(
                         throw PromQLException("invalid regex at label_replace: ${pex.message}")
                     }
                 },
-                Function("label_join", listOf(ValueType.Vector, ValueType.String, ValueType.String, ValueType.String), variadic = true) { vals, _, _ -> TODO() },
+                Function("label_join", listOf(ValueType.Vector, ValueType.String, ValueType.String, ValueType.String), variadic = true) { vals, _, _ ->
+                    val m = vals[0] as GridMat
+                    val dst = vals[1] as StringValue
+                    val sep = vals[2] as StringValue
+                    val sources = vals.drop(3).map {
+                        it as StringValue
+                        if (!Utils.isValidLabelName(it.value)) {
+                            throw PromQLException("label name '${it.value}' at label_join is invalid")
+                        }
+                        it.value
+                    }
+                    try {
+                        val replacedMetrics = m.metrics.map { met ->
+                            val dstVal = sources.joinToString(sep.value) { srcMet -> met.m[srcMet] ?: "" }
+                            val newMet = met.m.toSortedMap() // copy needs here
+                            if (dstVal.isEmpty()) {
+                                newMet.remove(dst.value)
+                            } else {
+                                newMet[dst.value] = dstVal
+                            }
+                            if (!Utils.isValidLabelName(dst.value)) {
+                                throw PromQLException("${dst.value} is invalid as a label")
+                            }
+                            return@map Metric(newMet)
+                        }
+                        try {
+                            GridMat.withSortting(replacedMetrics, m.timestamps, m.values)
+                        } catch (e: EpimetheusException) {
+                            throw PromQLException(e.message)
+                        }
+                    } catch (pex: PatternSyntaxException) {
+                        throw PromQLException("invalid regex at label_replace: ${pex.message}")
+                    }
+                },
                 Function("ln") { vals, _, node ->
                     simpleFn(vals[0] as GridMat, node, Math::log)
                 },
@@ -354,8 +444,8 @@ data class Function(
                         }
                     }.dropMetricName()
                 },
-                Function("minute", variadic = true, body = timeConvertUtil(Calendar.MINUTE)),
-                Function("month", variadic = true, body = timeConvertUtil(Calendar.MONTH)),
+                Function("minute", variadic = true, body = timeConvertUtil(ChronoField.MINUTE_OF_HOUR)),
+                Function("month", variadic = true, body = timeConvertUtil(ChronoField.MONTH_OF_YEAR)),
                 Function("predict_linear", listOf(ValueType.Matrix, ValueType.Scalar)) { vals, _, _ ->
                     val m = vals[0] as RangeGridMat
                     val s = vals[1] as Scalar
@@ -366,7 +456,17 @@ data class Function(
                         slope * s.value + intercept
                     }.dropMetricName()
                 },
-                Function("quantile_over_time", listOf(ValueType.Scalar, ValueType.Matrix)) { vals, _, _ -> TODO() },
+                Function("quantile_over_time", listOf(ValueType.Scalar, ValueType.Matrix)) { vals, _, _ ->
+                    val q = (vals[0] as Scalar).value
+                    val m = vals[1] as RangeGridMat
+                    m.applyUnifyFn { _, _, _, vs ->
+                        if (vs.isEmpty()) {
+                            return@applyUnifyFn Mat.StaleValue
+                        }
+                        val heap = Arrays.copyOf(vs, vs.size)
+                        quantile(q, heap)
+                    }.dropMetricName()
+                },
                 Function("rate", listOf(ValueType.Matrix)) { vals, args, node ->
                     extrapolatedRate(vals, args, node, true, true)
                 },
@@ -410,8 +510,36 @@ data class Function(
                     val m = vals[0] as GridMat
                     simpleFn(m, node, Math::sqrt)
                 },
-                Function("stddev_over_time", listOf(ValueType.Matrix)) { vals, _, _ -> TODO() },
-                Function("stdvar_over_time", listOf(ValueType.Matrix)) { vals, _, _ -> TODO() },
+                Function("stddev_over_time", listOf(ValueType.Matrix)) { vals, _, _ ->
+                    val m = vals[0] as RangeGridMat
+                    m.applyUnifyFn { metric, ts, timestamps, values ->
+                        var aux = 0.0
+                        var count = 0.0
+                        var mean = 0.0
+                        for (i in 0 until values.size) {
+                            count++
+                            val delta = values[i] - mean
+                            mean += delta / count
+                            aux += delta * (values[i] - mean)
+                        }
+                        Math.sqrt(aux / count)
+                    }.dropMetricName()
+                },
+                Function("stdvar_over_time", listOf(ValueType.Matrix)) { vals, _, _ ->
+                    val m = vals[0] as RangeGridMat
+                    m.applyUnifyFn { metric, ts, timestamps, values ->
+                        var aux = 0.0
+                        var count = 0.0
+                        var mean = 0.0
+                        for (i in 0 until values.size) {
+                            count++
+                            val delta = values[i] - mean
+                            mean += delta / count
+                            aux += delta * (values[i] - mean)
+                        }
+                        aux / count
+                    }.dropMetricName()
+                },
                 Function("sum_over_time", listOf(ValueType.Matrix)) { vals, _, _ ->
                     val m = vals[0] as RangeGridMat
                     m.applyUnifyFn { _, _, _, vs ->
@@ -433,7 +561,7 @@ data class Function(
                     val ts = node.frames.toList()
                     GridMat.of(ts, 0L, Metric.empty to DoubleArray(ts.size) { s.value })
                 },
-                Function("year", variadic = true, body = timeConvertUtil(Calendar.YEAR))
+                Function("year", variadic = true, body = timeConvertUtil(ChronoField.YEAR))
         )
     }
 }
