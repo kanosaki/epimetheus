@@ -18,6 +18,7 @@ data class LabelMatcher(val lmt: LabelMatchType, val value: String) {
             LabelMatchType.NotMatch -> !pat!!.matches(labelValue)
         }
     }
+
 }
 
 data class MetricMatcher(val matchers: List<Pair<String, LabelMatcher>>) {
@@ -27,11 +28,20 @@ data class MetricMatcher(val matchers: List<Pair<String, LabelMatcher>>) {
         return namePat?.second
     }
 
-    fun matches(met: Metric, ignoreName: Boolean = false): Boolean {
+    fun test(lm: LabelMatcher, met: Metric, key: String): Boolean {
         val m = met.m
+        val emptyMatching = (lm.lmt == LabelMatchType.Neq || lm.lmt == LabelMatchType.NotMatch || lm.value == "")
+        return if (!emptyMatching) {
+            m.containsKey(key) && lm.matches(m[key]!!)
+        } else {
+            !m.containsKey(key) || lm.matches(m[key]!!)
+        }
+    }
+
+    fun matches(met: Metric, ignoreName: Boolean = false): Boolean {
         return matchers.all {
             (ignoreName && it.first == Metric.nameLabel) || // pass name label if ignoreName is true
-                    m.containsKey(it.first) && it.second.matches(m[it.first]!!)
+                    test(it.second, met, it.first)
         }
     }
 
