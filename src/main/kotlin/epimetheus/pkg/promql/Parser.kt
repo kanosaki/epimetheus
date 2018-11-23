@@ -130,8 +130,11 @@ object PromQL {
 
     class ExpressionVisitor(val binding: Binding) : PromQLParserBaseVisitor<Expression>() {
 
-        private fun visitBinary(ctx: ParserRuleContext, match: PromQLParser.LabelMatchOpContext?, group: PromQLParser.LabelGroupOpContext?): Expression {
-            return if (ctx.childCount == 1) {
+        private fun visitBinary(ctx: ParserRuleContext, mods: PromQLParser.BinOpModifiersContext?): Expression {
+            val boolMod = mods?.boolOp()
+            val match = mods?.labelMatchOp()
+            val group = mods?.labelGroupOp()
+            val ret = if (ctx.childCount == 1) {
                 this.visit(ctx.getChild(0))
             } else {
                 val opName = ctx.getChild(1).text.toLowerCase()
@@ -159,42 +162,43 @@ object PromQL {
                                 matchOn,
                                 lgo?.labels ?: listOf()))
             }
-        }
-
-        override fun visitCondOrExpr(ctx: PromQLParser.CondOrExprContext?): Expression {
-            return visitBinary(ctx!!, ctx.labelMatchOp(), ctx.labelGroupOp())
-        }
-
-        override fun visitCondAndExpr(ctx: PromQLParser.CondAndExprContext?): Expression {
-            return visitBinary(ctx!!, ctx.labelMatchOp(), ctx.labelGroupOp())
-        }
-
-        override fun visitEqExpr(ctx: PromQLParser.EqExprContext?): Expression {
-            return visitBinary(ctx!!, ctx.labelMatchOp(), ctx.labelGroupOp())
-        }
-
-        override fun visitRelationalExpr(ctx: PromQLParser.RelationalExprContext?): Expression {
-            return visitBinary(ctx!!, ctx.labelMatchOp(), ctx.labelGroupOp())
-        }
-
-        override fun visitNumericalExpr(ctx: PromQLParser.NumericalExprContext?): Expression {
-            return if (ctx!!.getChild(0)?.text == "bool") {
-                BoolConvert(visitAdditiveExpr(ctx.additiveExpr()))
+            return if (boolMod != null) {
+                BoolConvert(ret)
             } else {
-                visitAdditiveExpr(ctx.additiveExpr())
+                ret
             }
         }
 
+        override fun visitCondOrExpr(ctx: PromQLParser.CondOrExprContext?): Expression {
+            return visitBinary(ctx!!, ctx.binOpModifiers())
+        }
+
+        override fun visitCondAndExpr(ctx: PromQLParser.CondAndExprContext?): Expression {
+            return visitBinary(ctx!!, ctx.binOpModifiers())
+        }
+
+        override fun visitEqExpr(ctx: PromQLParser.EqExprContext?): Expression {
+            return visitBinary(ctx!!, ctx.binOpModifiers())
+        }
+
+        override fun visitRelationalExpr(ctx: PromQLParser.RelationalExprContext?): Expression {
+            return visitBinary(ctx!!, ctx.binOpModifiers())
+        }
+
+        override fun visitNumericalExpr(ctx: PromQLParser.NumericalExprContext?): Expression {
+            return visitAdditiveExpr(ctx!!.additiveExpr())
+        }
+
         override fun visitAdditiveExpr(ctx: PromQLParser.AdditiveExprContext?): Expression {
-            return visitBinary(ctx!!, ctx.labelMatchOp(), ctx.labelGroupOp())
+            return visitBinary(ctx!!, ctx.binOpModifiers())
         }
 
         override fun visitMultiplicativeExpr(ctx: PromQLParser.MultiplicativeExprContext?): Expression {
-            return visitBinary(ctx!!, ctx.labelMatchOp(), ctx.labelGroupOp())
+            return visitBinary(ctx!!, ctx.binOpModifiers())
         }
 
         override fun visitPowerExpr(ctx: PromQLParser.PowerExprContext?): Expression {
-            return visitBinary(ctx!!, ctx.labelMatchOp(), ctx.labelGroupOp())
+            return visitBinary(ctx!!, ctx.binOpModifiers())
         }
 
         override fun visitSelector(ctx: PromQLParser.SelectorContext?): Expression {

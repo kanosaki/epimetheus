@@ -26,7 +26,9 @@ class FullLoggingTracer : Tracer {
     val log = LinkedList<EvalLog>()
 
     override fun enteringEvalExpr(ast: Expression, depth: Int) {
-        beginTime = System.nanoTime()
+        if (beginTime == null) {
+            beginTime = System.nanoTime()
+        }
     }
 
     override fun onEvalExpr(ast: Expression, result: Value, depth: Int) {

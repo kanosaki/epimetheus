@@ -30,8 +30,8 @@ open class Metric(val m: SortedMap<String, String>) {
      * on: true -> calc fingerprint only with specified label values (`on` mode)
      * on: false -> calc fingerprint WITHOUT specified label values (`ignoring` mode)
      */
-    fun filteredFingerprint(on: Boolean, labels: Collection<String>): Signature {
-        return labelFilteredFingerprintFNV(on, m, labels)
+    fun filteredFingerprint(on: Boolean, labels: Collection<String>, withoutNameLabel: Boolean = false): Signature {
+        return labelFilteredFingerprintFNV(on, m, labels, withoutNameLabel)
     }
 
     fun name(): String {
@@ -113,10 +113,10 @@ open class Metric(val m: SortedMap<String, String>) {
         }
 
 
-        fun labelFilteredFingerprintFNV(on: Boolean, m: SortedMap<String, String>, onLabels: Collection<String>): Signature {
+        fun labelFilteredFingerprintFNV(on: Boolean, m: SortedMap<String, String>, onLabels: Collection<String>, excludeNameLabel: Boolean): Signature {
             var res = FNV64.create()
             m.forEach { k, v ->
-                if ((!on) xor onLabels.contains(k)) {
+                if ((!on) xor onLabels.contains(k) && (!excludeNameLabel || k != nameLabel)) {
                     var sum = FNV64.create()
                     sum = FNV64.update(sum, k.toByteArray())
                     sum = FNV64.update(sum, SeparatorByte)

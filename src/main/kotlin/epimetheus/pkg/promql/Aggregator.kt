@@ -32,9 +32,9 @@ data class Aggregator(
                                 AggregatorGroupType.Without -> met.filterWithout(true, *group.labels.toTypedArray())
                             }
                             val fp = filteredMetric.fingerprint()
+                            filteredMets[fp] = filteredMetric
                             if (filteredMetMapping.containsKey(fp)) {
                                 filteredMetMapping[fp].add(index)
-                                filteredMets[fp] = filteredMetric
                             } else {
                                 filteredMetMapping[fp] = IntArraySet(listOf(index))
                             }

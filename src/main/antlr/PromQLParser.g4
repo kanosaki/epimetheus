@@ -83,15 +83,15 @@ range
     ;
 
 offset
-    : 'offset' duration
+    : Offset duration
     ;
 
 aggregateBy
-    : 'by' labelList
+    : By labelList
     ;
 
 aggregateWithout
-    : 'without' labelList
+    : Without labelList
     ;
 
 aggregateGroup
@@ -105,59 +105,69 @@ application
     ;
 
 labelMatchOp
-    : 'on' labelList
-    | 'ignoring' labelList
+    : On labelList
+    | Ignoring labelList
     ;
 
 labelGroupOp
-    : 'group_left' labelList?
-    | 'group_right' labelList?
+    : GroupLeft labelList?
+    | GroupRight labelList?
+    ;
+
+boolOp
+    : Bool
+    ;
+
+binOpModifiers
+    : boolOp
+    | labelMatchOp labelGroupOp?
+    | labelGroupOp
     ;
 
 condOrExpr
 	:	condAndExpr
-	|	condOrExpr 'or' labelMatchOp? labelGroupOp? condAndExpr
+	|	condOrExpr Or binOpModifiers? condAndExpr
 	;
 
 condAndExpr
 	:	eqExpr
-	|	condAndExpr 'and' labelMatchOp? labelGroupOp? eqExpr
-	|	condAndExpr 'unless' labelMatchOp? labelGroupOp? eqExpr
+	|	condAndExpr And binOpModifiers? eqExpr
+	|	condAndExpr Unless binOpModifiers? eqExpr
 	;
 
 eqExpr
 	:	relationalExpr
-	|	eqExpr '==' labelMatchOp? labelGroupOp? relationalExpr
-	|	eqExpr '!=' labelMatchOp? labelGroupOp? relationalExpr
+	|	eqExpr '==' binOpModifiers? relationalExpr
+	|	eqExpr '!=' binOpModifiers? relationalExpr
 	;
 
 relationalExpr
 	:	numericalExpr
-	|	relationalExpr '<'  labelMatchOp? labelGroupOp? numericalExpr
-	|	relationalExpr '>'  labelMatchOp? labelGroupOp? numericalExpr
-	|	relationalExpr '<=' labelMatchOp? labelGroupOp? numericalExpr
-	|	relationalExpr '>=' labelMatchOp? labelGroupOp? numericalExpr
+	|	relationalExpr '<'  binOpModifiers? numericalExpr
+	|	relationalExpr '>'  binOpModifiers? numericalExpr
+	|	relationalExpr '<=' binOpModifiers? numericalExpr
+	|	relationalExpr '>=' binOpModifiers? numericalExpr
 	;
 
 numericalExpr
-    : 'bool'? additiveExpr
+    : additiveExpr
     ;
 
 additiveExpr
 	:	multiplicativeExpr
-	|	additiveExpr '+' labelMatchOp? labelGroupOp? multiplicativeExpr
-	|	additiveExpr '-' labelMatchOp? labelGroupOp? multiplicativeExpr
+	|	additiveExpr '+' binOpModifiers? multiplicativeExpr
+	|	additiveExpr '-' binOpModifiers? multiplicativeExpr
 	;
 
 multiplicativeExpr
 	:	powerExpr
-	|	multiplicativeExpr '*' labelMatchOp? labelGroupOp? powerExpr
-	|	multiplicativeExpr '/' labelMatchOp? labelGroupOp? powerExpr
-	|	multiplicativeExpr '%' labelMatchOp? labelGroupOp? powerExpr
+	|	multiplicativeExpr '*' binOpModifiers? powerExpr
+	|	multiplicativeExpr '/' binOpModifiers? powerExpr
+	|	multiplicativeExpr '%' binOpModifiers? powerExpr
 	;
 
 powerExpr
-    : atom ('^' labelMatchOp? labelGroupOp? multiplicativeExpr)?
+    : atom ('^' binOpModifiers? multiplicativeExpr)?
     ;
 
 atom

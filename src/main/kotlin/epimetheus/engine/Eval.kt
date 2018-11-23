@@ -1,13 +1,9 @@
 package epimetheus.engine
 
-import epimetheus.model.Scalar
-import epimetheus.model.StringValue
-import epimetheus.model.TimeFrames
-import epimetheus.model.Value
+import epimetheus.model.*
 import epimetheus.pkg.promql.*
 import epimetheus.storage.Gateway
 import java.time.ZoneId
-import java.util.*
 
 class Eval(val frames: TimeFrames, val storage: Gateway, val tracer: Tracer = Tracer.empty) {
     fun eval(ast: Expression): Value {
@@ -48,7 +44,7 @@ class DefaultEvalNode(override val top: Eval, val parent: EvalNode?) : EvalNode 
                 val evLhs = evalExpr(ast.lhs, depth + 1)
                 val evRhs = evalExpr(ast.rhs, depth + 1)
                 // XXX: identical mapping
-                ast.op.eval(evLhs, evRhs) // TODO
+                ast.op.eval(evLhs, evRhs, ast.matching) // TODO
             }
             is AggregatorCall -> {
                 val vals = ast.params.map { evalExpr(it, depth + 1) }
@@ -58,6 +54,17 @@ class DefaultEvalNode(override val top: Eval, val parent: EvalNode?) : EvalNode 
                 val childNode = DefaultEvalNode(top, this)
                 val params = ast.args.map { childNode.evalExpr(it, depth + 1) }
                 ast.fn.call(params, ast.args, this)
+            }
+            is BoolConvert -> {
+                val v = evalExpr(ast.expr, depth + 1)
+                when (v) {
+                    is Scalar -> if (v.value == 0.0 || !v.value.isFinite()) Scalar(0.0) else Scalar(1.0)
+                    is GridMat -> {
+                        val mapped = v.mapRows { _, _, vs -> DoubleArray(vs.size) { if (vs[it] == 0.0 || !vs[it].isFinite()) 0.0 else 1.0 } }
+                        mapped.dropMetricName()
+                    }
+                    else -> throw PromQLException("cannot convert ${v.javaClass} to bool")
+                }
             }
             else -> TODO("$ast not implemented")
         }

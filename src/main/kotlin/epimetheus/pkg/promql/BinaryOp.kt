@@ -1,249 +1,300 @@
 package epimetheus.pkg.promql
 
 import epimetheus.model.*
+import it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap
+import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap
+import it.unimi.dsi.fastutil.longs.LongArraySet
 
-data class BinaryOp(
-        val name: String,
-        val isSetOperator: Boolean = false,
-        val isComparisionOperator: Boolean = false,
-        val gridMatAndMat: (GridMat, GridMat, MatMatch) -> GridMat,
-        val scalarAndGridMat: (Scalar, GridMat) -> GridMat,
-        val gridMatAndScalar: (GridMat, Scalar) -> GridMat,
-        val scalarAndScalar: (Scalar, Scalar) -> Scalar
-) {
-    fun eval(lhs: Value, rhs: Value): Value {
-        // TODO: Handle bool modifier (rhs will be BoolConvert?)
-        return when {
-            lhs is GridMat && rhs is GridMat -> {
-                val mm = MatMatch.oneToOne(lhs, rhs, false, listOf(Metric.nameLabel))
-                        ?: throw PromQLException("Lhs and Rhs does not match: lhs($lhs), rhs($rhs)")
-                gridMatAndMat(lhs, rhs, mm)
+abstract class BinaryOp {
+    abstract val name: String
+    abstract val shouldDropMetricName: Boolean
+    abstract val isSetOperator: Boolean
+    abstract fun eval(lhs: Value, rhs: Value, matching: VectorMatching): Value
+
+    protected fun resultMetric(lhsMet: Metric, rhsMet: Metric, matching: VectorMatching): Metric {
+        val m = lhsMet.m.toSortedMap()
+        if (shouldDropMetricName) {
+            m.remove(Metric.nameLabel)
+        }
+        if (matching.card == VectorMatchingCardinality.OneToOne) {
+            if (matching.on) {
+                val removing = m.filter { !matching.matchingLabels.contains(it.key) }
+                removing.forEach {
+                    m.remove(it.key)
+                }
+            } else {
+                matching.matchingLabels.forEach {
+                    m.remove(it)
+                }
             }
-            lhs is Scalar && rhs is GridMat -> scalarAndGridMat(lhs, rhs)
-            lhs is GridMat && rhs is Scalar -> gridMatAndScalar(lhs, rhs)
-            lhs is Scalar && rhs is Scalar -> scalarAndScalar(lhs, rhs)
-            else -> throw RuntimeException("never here")
+        }
+        for (inc in matching.include) {
+            if (rhsMet.m.containsKey(inc)) {
+                m[inc] = rhsMet.m[inc]
+            } else {
+                m.remove(inc)
+            }
+        }
+        return Metric(m)
+    }
+
+    data class ArithAndLogical(
+            override val name: String,
+            override val shouldDropMetricName: Boolean = false, // true when +, -, *, /, %
+            val opFn: (DoubleArray, DoubleArray) -> DoubleArray
+    ) : BinaryOp() {
+        override val isSetOperator = false
+
+        override fun eval(lhs: Value, rhs: Value, matching: VectorMatching): Value {
+            // TODO: Handle bool modifier (rhs will be BoolConvert?)
+            return when {
+                lhs is GridMat && rhs is GridMat -> evalMatMat(lhs, rhs, matching)
+                lhs is Scalar && rhs is GridMat -> {
+                    val l = DoubleArray(rhs.timestamps.size) { lhs.value }
+                    val res = rhs.mapRows { _, _, vs ->
+                        opFn(l, vs)
+                    }
+                    if (shouldDropMetricName) {
+                        res.dropMetricName()
+                    } else {
+                        res
+                    }
+                }
+                lhs is GridMat && rhs is Scalar -> {
+                    val r = DoubleArray(lhs.timestamps.size) { rhs.value }
+                    val res = lhs.mapRows { _, _, vs ->
+                        opFn(vs, r)
+                    }
+                    if (shouldDropMetricName) {
+                        res.dropMetricName()
+                    } else {
+                        res
+                    }
+                }
+                lhs is Scalar && rhs is Scalar -> {
+                    Scalar(opFn(doubleArrayOf(lhs.value), doubleArrayOf(rhs.value)).first())
+                }
+                else -> throw RuntimeException("never here")
+            }
+        }
+
+        private fun evalMatMat(oLhs: GridMat, oRhs: GridMat, matching: VectorMatching): Value {
+            if (matching.card == VectorMatchingCardinality.ManyToMany) {
+                throw PromQLException("many-to-many only allowed for set operators")
+            }
+
+            // The control flow below handles one-to-one or many-to-one matching.
+            // For one-to-many, swap sidedness and account for the swap when calculating
+            // values.
+            val sideSwapped = matching.card == VectorMatchingCardinality.OneToMany
+            val lhs = if (sideSwapped) oRhs else oLhs
+            val rhs = if (sideSwapped) oLhs else oRhs
+            val rightSigs = Long2IntOpenHashMap(rhs.metrics.size)
+            for (i in 0 until rhs.metrics.size) {
+                val sig = rhs.metrics[i].filteredFingerprint(matching.on, matching.matchingLabels, shouldDropMetricName)
+                if (rightSigs.containsKey(sig)) {
+                    throw PromQLException("many-to-many matching not allowed: matching labels must be unique on one side: duplicates ${rhs.metrics[i]}")
+                }
+                rightSigs[sig] = i
+            }
+
+            val matchedSigs = Long2ObjectOpenHashMap<LongArraySet>(rightSigs.size)
+
+            val resultMetrics = mutableListOf<Metric>()
+            val resultValues = mutableListOf<DoubleArray>()
+
+            for (i in 0 until lhs.metrics.size) {
+                val sig = lhs.metrics[i].filteredFingerprint(matching.on, matching.matchingLabels, shouldDropMetricName)
+                if (!rightSigs.containsKey(sig)) {
+                    continue // or set stale?
+                }
+                val rs = rightSigs[sig]
+                val vals = opFn(lhs.values[i], rhs.values[rs])
+                val metric = resultMetric(lhs.metrics[i], rhs.metrics[rs], matching)
+
+                val insertedSigs = matchedSigs[sig]
+                if (matching.card == VectorMatchingCardinality.OneToOne) {
+                    if (insertedSigs != null) {
+                        throw PromQLException("multiple matches for labels: many-to-one matching must be explicit (group_left/group_right)")
+                    }
+                    matchedSigs[sig] = LongArraySet()
+                } else {
+                    val insertSig = metric.fingerprint()
+
+                    if (insertedSigs == null) {
+                        val las = LongArraySet()
+                        las.add(insertSig)
+                        matchedSigs[sig] = las
+                    } else if (insertedSigs.contains(insertSig)) {
+                        throw PromQLException("multiple matches for labels: grouping labels must ensure unique matches")
+                    } else {
+                        insertedSigs.add(insertSig)
+                    }
+                }
+                resultMetrics.add(metric)
+                resultValues.add(vals)
+            }
+            return GridMat.withSortting(resultMetrics, oLhs.timestamps, resultValues.toList())
         }
     }
 
+    data class SetOp(
+            override val name: String,
+            val opFn: (GridMat, GridMat, VectorMatching) -> GridMat
+    ) : BinaryOp() {
+        override val shouldDropMetricName = false
+        override val isSetOperator = true
+
+        override fun eval(lhs: Value, rhs: Value, matching: VectorMatching): Value {
+            if (lhs !is GridMat || rhs !is GridMat) {
+                throw PromQLException("$name defined only between instant vectors")
+            }
+            if (matching.card != VectorMatchingCardinality.ManyToMany) {
+                throw PromQLException("set operations must only use many-to-many matching")
+            }
+            return opFn(lhs, rhs, matching)
+        }
+    }
+
+
     companion object {
-        private fun filterMetricNames(gridMat: GridMat): Array<Metric> {
-            return Array(gridMat.metrics.size) { gridMat.metrics[it].filterWithout(true) }
-        }
-
-        private fun simpleOp(fn: (lvals: DoubleArray, rvals: DoubleArray) -> DoubleArray): (GridMat, GridMat, MatMatch) -> GridMat {
-            return { l, r, mm ->
-                mm.apply(fn)
-            }
-        }
-
-        private fun scalaMat(fn: (scalar: Scalar, mat: DoubleArray) -> DoubleArray): (Scalar, GridMat) -> GridMat {
-            return { s, m ->
-                val values = mutableListOf<DoubleArray>()
-                for (row in m.values) {
-                    values.add(fn(s, row))
-                }
-                GridMat(filterMetricNames(m), m.timestamps, values)
-            }
-        }
-
-        private fun matScala(fn: (mat: DoubleArray, scalar: Scalar) -> DoubleArray): (GridMat, Scalar) -> GridMat {
-            return { m, s ->
-                val values = mutableListOf<DoubleArray>()
-                for (row in m.values) {
-                    values.add(fn(row, s))
-                }
-                GridMat(filterMetricNames(m), m.timestamps, values)
-            }
-        }
-
         val builtins = listOf(
-                BinaryOp("+",
-                        gridMatAndMat = simpleOp { lvals, rvals ->
-                            val resvals = DoubleArray(lvals.size)
-                            for (i in 0..(lvals.size - 1)) {
-                                resvals[i] = lvals[i] + rvals[i]
-                            }
-                            resvals
-                        },
-                        scalarAndGridMat = scalaMat { s, m ->
-                            val sval = s.value
-                            val resvals = DoubleArray(m.size)
-                            for (i in 0..(m.size - 1)) {
-                                resvals[i] = sval + m[i]
-                            }
-                            resvals
-                        },
-                        gridMatAndScalar = matScala { m, s ->
-                            val sval = s.value
-                            val resvals = DoubleArray(m.size)
-                            for (i in 0..(m.size - 1)) {
-                                resvals[i] = m[i] + sval
-                            }
-                            resvals
-                        },
-                        scalarAndScalar = { s1, s2 ->
-                            Scalar(s1.value + s2.value)
+                ArithAndLogical("+", shouldDropMetricName = true) { lhs, rhs ->
+                    val r = DoubleArray(lhs.size)
+                    for (i in 0 until r.size) {
+                        r[i] = lhs[i] + rhs[i]
+                    }
+                    r
+                },
+                ArithAndLogical("-", shouldDropMetricName = true) { lhs, rhs ->
+                    val r = DoubleArray(lhs.size)
+                    for (i in 0 until r.size) {
+                        r[i] = lhs[i] - rhs[i]
+                    }
+                    r
+                },
+                ArithAndLogical("*", shouldDropMetricName = true) { lhs, rhs ->
+                    val r = DoubleArray(lhs.size)
+                    for (i in 0 until r.size) {
+                        r[i] = lhs[i] * rhs[i]
+                    }
+                    r
+                },
+                ArithAndLogical("/", shouldDropMetricName = true) { lhs, rhs ->
+                    val r = DoubleArray(lhs.size)
+                    for (i in 0 until r.size) {
+                        r[i] = lhs[i] / rhs[i]
+                    }
+                    r
+                },
+                ArithAndLogical("%", shouldDropMetricName = true) { lhs, rhs ->
+                    val r = DoubleArray(lhs.size)
+                    for (i in 0 until r.size) {
+                        r[i] = lhs[i] % rhs[i]
+                    }
+                    r
+                },
+                ArithAndLogical("^") { lhs, rhs ->
+                    DoubleArray(lhs.size) { i ->
+                        Math.pow(lhs[i], rhs[i])
+                    }
+                },
+                ArithAndLogical("==") { lhs, rhs ->
+                    DoubleArray(lhs.size) { i ->
+                        if (lhs[i] == rhs[i]) {
+                            lhs[i]
+                        } else {
+                            Mat.StaleValue
                         }
-                ),
-                BinaryOp("-",
-                        gridMatAndMat = simpleOp { lvals, rvals ->
-                            val resvals = DoubleArray(lvals.size)
-                            for (i in 0..(lvals.size - 1)) {
-                                resvals[i] = lvals[i] - rvals[i]
-                            }
-                            resvals
-                        },
-                        scalarAndGridMat = scalaMat { s, m ->
-                            val sval = s.value
-                            val resvals = DoubleArray(m.size)
-                            for (i in 0..(m.size - 1)) {
-                                resvals[i] = sval - m[i]
-                            }
-                            resvals
-                        },
-                        gridMatAndScalar = matScala { m, s ->
-                            val sval = s.value
-                            val resvals = DoubleArray(m.size)
-                            for (i in 0..(m.size - 1)) {
-                                resvals[i] = m[i] - sval
-                            }
-                            resvals
-                        },
-                        scalarAndScalar = { s1, s2 ->
-                            Scalar(s1.value - s2.value)
+                    }
+                },
+                ArithAndLogical("!=") { lhs, rhs ->
+                    DoubleArray(lhs.size) { i ->
+                        if (lhs[i] != rhs[i]) {
+                            lhs[i]
+                        } else {
+                            Mat.StaleValue
                         }
-                ),
-                BinaryOp("*",
-                        gridMatAndMat = simpleOp { lvals, rvals ->
-                            val resvals = DoubleArray(lvals.size)
-                            for (i in 0..(lvals.size - 1)) {
-                                resvals[i] = lvals[i] * rvals[i]
-                            }
-                            resvals
-                        },
-                        scalarAndGridMat = scalaMat { s, m ->
-                            val sval = s.value
-                            val resvals = DoubleArray(m.size)
-                            for (i in 0..(m.size - 1)) {
-                                resvals[i] = sval * m[i]
-                            }
-                            resvals
-                        },
-                        gridMatAndScalar = matScala { m, s ->
-                            val sval = s.value
-                            val resvals = DoubleArray(m.size)
-                            for (i in 0..(m.size - 1)) {
-                                resvals[i] = m[i] * sval
-                            }
-                            resvals
-                        },
-                        scalarAndScalar = { s1, s2 ->
-                            Scalar(s1.value * s2.value)
+                    }
+                },
+                ArithAndLogical(">") { lhs, rhs ->
+                    DoubleArray(lhs.size) { i ->
+                        if (lhs[i] > rhs[i]) {
+                            lhs[i]
+                        } else {
+                            Mat.StaleValue
                         }
-                ),
-                BinaryOp("/",
-                        gridMatAndMat = simpleOp { lvals, rvals ->
-                            val resvals = DoubleArray(lvals.size)
-                            for (i in 0..(lvals.size - 1)) {
-                                if (rvals[i] == 0.0) {
-                                    val lv = lvals[i]
-                                    resvals[i] = when {
-                                        lv == 0.0 -> Double.NaN
-                                        lv > 0.0 -> Double.POSITIVE_INFINITY
-                                        else -> Double.NEGATIVE_INFINITY
-                                    }
-                                } else {
-                                    resvals[i] = lvals[i] / rvals[i]
-                                }
-                            }
-                            resvals
-                        },
-                        scalarAndGridMat = scalaMat { s, m ->
-                            val sval = s.value
-                            val resvals = DoubleArray(m.size)
-                            for (i in 0..(m.size - 1)) {
-                                if (m[i] == 0.0) {
-                                    resvals[i] = when {
-                                        sval == 0.0 -> Double.NaN
-                                        sval > 0.0 -> Double.POSITIVE_INFINITY
-                                        else -> Double.NEGATIVE_INFINITY
-                                    }
-                                } else {
-                                    resvals[i] = sval / m[i]
-                                }
-                            }
-                            resvals
-                        },
-                        gridMatAndScalar = matScala { m, s ->
-                            val sval = s.value
-                            val resvals = DoubleArray(m.size)
-                            for (i in 0..(m.size - 1)) {
-                                if (sval == 0.0) {
-                                    val lv = m[i]
-                                    resvals[i] = when {
-                                        lv == 0.0 -> Double.NaN
-                                        lv > 0.0 -> Double.POSITIVE_INFINITY
-                                        else -> Double.NEGATIVE_INFINITY
-                                    }
-                                } else {
-                                    resvals[i] = m[i] / sval
-                                }
-                            }
-                            resvals
-                        },
-                        scalarAndScalar = { s1, s2 ->
-                            if (s2.value == 0.0) {
-                                when {
-                                    s1.value == 0.0 -> Scalar(Double.NaN)
-                                    s1.value > 0.0 -> Scalar(Double.POSITIVE_INFINITY)
-                                    else -> Scalar(Double.NEGATIVE_INFINITY)
-                                }
-                            } else {
-                                Scalar(s1.value / s2.value)
-                            }
+                    }
+                },
+                ArithAndLogical("<") { lhs, rhs ->
+                    DoubleArray(lhs.size) { i ->
+                        if (lhs[i] < rhs[i]) {
+                            lhs[i]
+                        } else {
+                            Mat.StaleValue
                         }
-                ),
-                BinaryOp("%",
-                        gridMatAndMat = simpleOp { lvals, rvals ->
-                            val resvals = DoubleArray(lvals.size)
-                            for (i in 0..(lvals.size - 1)) {
-                                resvals[i] = lvals[i] % rvals[i]
-                            }
-                            resvals
-                        },
-                        scalarAndGridMat = scalaMat { s, m ->
-                            val sval = s.value
-                            val resvals = DoubleArray(m.size)
-                            for (i in 0..(m.size - 1)) {
-                                resvals[i] = sval % m[i]
-                            }
-                            resvals
-                        },
-                        gridMatAndScalar = matScala { m, s ->
-                            val sval = s.value
-                            val resvals = DoubleArray(m.size)
-                            for (i in 0..(m.size - 1)) {
-                                resvals[i] = m[i] % sval
-                            }
-                            resvals
-                        },
-                        scalarAndScalar = { s1, s2 ->
-                            Scalar(s1.value % s2.value)
+                    }
+                },
+                ArithAndLogical(">=") { lhs, rhs ->
+                    DoubleArray(lhs.size) { i ->
+                        if (lhs[i] >= rhs[i]) {
+                            lhs[i]
+                        } else {
+                            Mat.StaleValue
                         }
-                ),
-                BinaryOp("^", gridMatAndMat = { m1, m2, matMatch -> TODO() }, gridMatAndScalar = { m, s -> TODO() }, scalarAndGridMat = { s, m -> TODO() }, scalarAndScalar = { s1, s2 -> TODO() }),
-
-                BinaryOp("==", isComparisionOperator = true, gridMatAndMat = { m1, m2, matMatch -> TODO() }, gridMatAndScalar = { m, s -> TODO() }, scalarAndGridMat = { s, m -> TODO() }, scalarAndScalar = { s1, s2 -> TODO() }),
-                BinaryOp("!=",isComparisionOperator = true, gridMatAndMat = { m1, m2, matMatch -> TODO() }, gridMatAndScalar = { m, s -> TODO() }, scalarAndGridMat = { s, m -> TODO() }, scalarAndScalar = { s1, s2 -> TODO() }),
-                BinaryOp(">", isComparisionOperator = true, gridMatAndMat = { m1, m2, matMatch -> TODO() }, gridMatAndScalar = { m, s -> TODO() }, scalarAndGridMat = { s, m -> TODO() }, scalarAndScalar = { s1, s2 -> TODO() }),
-                BinaryOp("<", isComparisionOperator = true, gridMatAndMat = { m1, m2, matMatch -> TODO() }, gridMatAndScalar = { m, s -> TODO() }, scalarAndGridMat = { s, m -> TODO() }, scalarAndScalar = { s1, s2 -> TODO() }),
-                BinaryOp(">=", isComparisionOperator = true, gridMatAndMat = { m1, m2, matMatch -> TODO() }, gridMatAndScalar = { m, s -> TODO() }, scalarAndGridMat = { s, m -> TODO() }, scalarAndScalar = { s1, s2 -> TODO() }),
-                BinaryOp("<=", isComparisionOperator = true, gridMatAndMat = { m1, m2, matMatch -> TODO() }, gridMatAndScalar = { m, s -> TODO() }, scalarAndGridMat = { s, m -> TODO() }, scalarAndScalar = { s1, s2 -> TODO() }),
-
-                BinaryOp("and", isSetOperator = true , gridMatAndMat = { m1, m2, matMatch -> TODO() }, gridMatAndScalar = { m, s -> TODO() }, scalarAndGridMat = { s, m -> TODO() }, scalarAndScalar = { s1, s2 -> TODO() }),
-                BinaryOp("or", isSetOperator = true , gridMatAndMat = { m1, m2, matMatch -> TODO() }, gridMatAndScalar = { m, s -> TODO() }, scalarAndGridMat = { s, m -> TODO() }, scalarAndScalar = { s1, s2 -> TODO() }),
-                BinaryOp("unless", isSetOperator = true , gridMatAndMat = { m1, m2, matMatch -> TODO() }, gridMatAndScalar = { m, s -> TODO() }, scalarAndGridMat = { s, m -> TODO() }, scalarAndScalar = { s1, s2 -> TODO() })
+                    }
+                },
+                ArithAndLogical("<=") { lhs, rhs ->
+                    DoubleArray(lhs.size) { i ->
+                        if (lhs[i] <= rhs[i]) {
+                            lhs[i]
+                        } else {
+                            Mat.StaleValue
+                        }
+                    }
+                },
+                SetOp("and") { lhs, rhs, matching ->
+                    val rightSigs = LongArraySet(rhs.metrics.size)
+                    rhs.metrics.forEach { met -> rightSigs.add(met.filteredFingerprint(matching.on, matching.matchingLabels, true)) }
+                    val resultMetrics = mutableListOf<Metric>()
+                    val resultValues = mutableListOf<DoubleArray>()
+                    lhs.metrics.forEachIndexed { index, met ->
+                        val fp = met.filteredFingerprint(matching.on, matching.matchingLabels, true)
+                        if (rightSigs.contains(fp)) {
+                            resultMetrics.add(met)
+                            resultValues.add(lhs.values[index])
+                        }
+                    }
+                    GridMat(resultMetrics.toTypedArray(), lhs.timestamps, resultValues)
+                },
+                SetOp("or") { lhs, rhs, matching ->
+                    val leftSigs = LongArraySet(lhs.metrics.size)
+                    lhs.metrics.forEach { met -> leftSigs.add(met.filteredFingerprint(matching.on, matching.matchingLabels, true)) }
+                    val resultMetrics = MutableList(lhs.metrics.size) { lhs.metrics[it] }
+                    val resultValues = MutableList(lhs.values.size) { lhs.values[it] }
+                    rhs.metrics.forEachIndexed { index, met ->
+                        val fp = met.filteredFingerprint(matching.on, matching.matchingLabels, true)
+                        if (!leftSigs.contains(fp)) {
+                            resultMetrics.add(met)
+                            resultValues.add(rhs.values[index])
+                        }
+                    }
+                    GridMat.withSortting(resultMetrics, lhs.timestamps, resultValues)
+                },
+                SetOp("unless") { lhs, rhs, matching ->
+                    val rightSigs = LongArraySet(lhs.metrics.size)
+                    rhs.metrics.forEach { met -> rightSigs.add(met.filteredFingerprint(matching.on, matching.matchingLabels, true)) }
+                    val resultMetrics = mutableListOf<Metric>()
+                    val resultValues = mutableListOf<DoubleArray>()
+                    lhs.metrics.forEachIndexed { index, met ->
+                        val fp = met.filteredFingerprint(matching.on, matching.matchingLabels, true)
+                        if (!rightSigs.contains(fp)) {
+                            resultMetrics.add(met)
+                            resultValues.add(lhs.values[index])
+                        }
+                    }
+                    GridMat(resultMetrics.toTypedArray(), lhs.timestamps, resultValues)
+                }
         )
     }
 }

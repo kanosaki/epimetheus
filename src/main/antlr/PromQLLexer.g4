@@ -65,27 +65,25 @@ OpEqlRegex: '=~';
 OpNeqRegex: '!~';
 OpPow: '^';
 
-
-LOpAnd: A N D;
-LOpOr: O R;
-LOpUnless: U N L E S S;
-
 // Aggregators
 
 // Keywords
-KWAlert: A L E R T;
-KWIf: I F;
-KWFor: F O R;
-KWLabels: L A B E L S;
-KWAnnotations: A N N O T A T I O N S;
-KWOffset: O F F S E T;
-KWBy: B Y;
-KWWithout: W I T H O U T;
-KWOn: O N;
-KWIgnoring: I G N O R I N G;
-KWGroupLeft: G R O U P '_' L E F T;
-KWGroupRight: G R O U P '_' R I G H T;
-KWBool: B O O L;
+Alert: A L E R T;
+If: I F;
+For: F O R;
+Labels: L A B E L S;
+Annotations: A N N O T A T I O N S;
+Offset: O F F S E T;
+By: B Y;
+Without: W I T H O U T;
+On: O N;
+Ignoring: I G N O R I N G;
+GroupLeft: G R O U P '_' L E F T;
+GroupRight: G R O U P '_' R I G H T;
+Bool: B O O L;
+Or: O R;
+And: A N D;
+Unless: U N L E S S;
 
 
 
