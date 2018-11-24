@@ -157,11 +157,11 @@ data class GridMat(val metrics: Array<Metric>, val timestamps: List<Long>, val v
             return name
         }
 
-        val cols = Array<Column<*>>(metrics.size + 1) { i ->
+        val cols = Array<Column<*>>(timestamps.size + 1) { i ->
             if (i == 0) {
-                StringColumn.create(mkUniqueName("ts"), timestamps.map { it.toString() })
+                StringColumn.create(mkUniqueName("metric"), metrics.map { it.toString() })
             } else {
-                StringColumn.create(mkUniqueName(metrics[i - 1].toString()), values[i - 1].map { Mat.formatValue(it) })
+                StringColumn.create(mkUniqueName(timestamps[i - 1].toString()), values.map { Mat.formatValue(it[i - 1]) })
             }
         }
         return Table.create(tableName, *cols)
