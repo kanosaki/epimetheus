@@ -1,5 +1,6 @@
 package epimetheus.engine
 
+import epimetheus.CacheName
 import epimetheus.model.*
 import epimetheus.pkg.promql.Expression
 import epimetheus.pkg.promql.PromQL
@@ -7,13 +8,14 @@ import epimetheus.pkg.promql.PromQLException
 import epimetheus.pkg.textparse.InvalidSpecLine
 import epimetheus.pkg.textparse.ScrapedSample
 import epimetheus.storage.Gateway
+import epimetheus.storage.IgniteGateway
 import epimetheus.storage.MockGateway
 import org.antlr.v4.runtime.CharStream
 import org.antlr.v4.runtime.CharStreams
 import org.apache.commons.io.IOUtils
-import org.junit.jupiter.api.DynamicTest
-import org.junit.jupiter.api.TestFactory
-import org.junit.jupiter.api.fail
+import org.apache.ignite.Ignition
+import org.apache.ignite.configuration.IgniteConfiguration
+import org.junit.jupiter.api.*
 import org.junit.jupiter.api.function.Executable
 import java.io.File
 import java.time.Duration
@@ -31,7 +33,7 @@ abstract class SpecCmd {
 /**
  * Runs Prometheus test cases(*.test files)
  */
-class PromSpec(val lines: List<String>) : Executable {
+class PromSpec(val lines: List<String>, val storageFactory: () -> Gateway) : Executable {
     companion object {
         private val patEvalInstant = Regex("""\s*instant\s+(?:at\s+(\S+)\s*)?(.+)${'$'}""")
     }
@@ -206,14 +208,14 @@ class PromSpec(val lines: List<String>) : Executable {
     }
 
     override fun execute() {
-        var storage = MockGateway()
+        var storage = storageFactory()
         var interpreter = Interpreter(storage)
         var ctx = SpecContext(storage, interpreter)
         commands.forEach {
             try {
                 when (it) {
                     is ClearCmd -> {
-                        storage = MockGateway()
+                        storage = storageFactory()
                         interpreter = Interpreter(storage)
                         ctx = SpecContext(storage, interpreter)
                     }
@@ -245,14 +247,36 @@ object PromSpecTests {
      * Spec files ported from prometheus repository
      */
     @TestFactory
-    fun fromPrometheus(): Collection<DynamicTest> {
+    fun withMockGateway(): Collection<DynamicTest> {
         val res = PromSpecTests::class.java.getResource("promspec/prometheus")
         val files = File(res.path).listFiles()
         return files.map {
             it.inputStream().use { input ->
                 val lines = IOUtils.readLines(input, Charsets.UTF_8)
                         .map { it.trim() }
-                DynamicTest.dynamicTest(it.name, PromSpec(lines))
+                DynamicTest.dynamicTest(it.name, PromSpec(lines) { MockGateway() })
+            }
+        }
+    }
+
+    @Tag("slow")
+    @TestFactory
+    fun withIgniteGateway(): Collection<DynamicTest> {
+        val res = PromSpecTests::class.java.getResource("promspec/prometheus")
+        val files = File(res.path).listFiles()
+        val conf = IgniteConfiguration().apply {
+            igniteInstanceName = "promspec"
+        }
+        return files.map {
+            it.inputStream().use { input ->
+                val lines = IOUtils.readLines(input, Charsets.UTF_8)
+                        .map { it.trim() }
+                DynamicTest.dynamicTest(it.name, PromSpec(lines) {
+                    val ign = Ignition.getOrStart(conf)
+                    ign.destroyCache(CacheName.Prometheus.METRIC_META)
+                    ign.destroyCache(CacheName.Prometheus.FRESH_SAMPLES)
+                    IgniteGateway(ign)
+                })
             }
         }
     }

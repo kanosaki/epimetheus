@@ -155,25 +155,6 @@ data class Function(
             }
         }
 
-        fun quantile(q: Double, vs: DoubleArray): Double {
-            if (vs.isEmpty()) {
-                return Double.NaN
-            }
-            if (q < 0) {
-                return Double.NEGATIVE_INFINITY
-            }
-            if (q > 1) {
-                return Double.POSITIVE_INFINITY
-            }
-            Arrays.sort(vs)
-            val n = vs.size.toDouble()
-            val rank = q * (n - 1)
-            val lowerIndex = Math.max(0.0, Math.floor(rank))
-            val upperIndex = Math.min(n - 1, lowerIndex + 1)
-            val weight = rank - Math.floor(rank)
-            return vs[lowerIndex.toInt()] * (1 - weight) + vs[upperIndex.toInt()] * weight
-        }
-
         private fun simpleFn(m: GridMat, node: EvalNode, fn: (Double) -> Double): Value {
             return m.mapRows { met, ts, vs ->
                 DoubleArray(vs.size) { fn(vs[it]) }
@@ -464,7 +445,7 @@ data class Function(
                             return@applyUnifyFn Mat.StaleValue
                         }
                         val heap = Arrays.copyOf(vs, vs.size)
-                        quantile(q, heap)
+                        Utils.quantile(q, heap)
                     }.dropMetricName()
                 },
                 Function("rate", listOf(ValueType.Matrix)) { vals, args, node ->

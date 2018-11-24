@@ -38,11 +38,11 @@ open class Metric(val m: SortedMap<String, String>) {
         return m[nameLabel]!!
     }
 
-    fun filterOn(vararg onLabels: String): Metric {
+    fun filterOn(onLabels: List<String>): Metric {
         return Metric(m.filter { onLabels.contains(it.key) }.toSortedMap())
     }
 
-    fun filterWithout(ignoreName: Boolean, vararg ignoreLabels: String): Metric {
+    fun filterWithout(ignoreName: Boolean, ignoreLabels: List<String>): Metric {
         return Metric(m.filter { !ignoreLabels.contains(it.key) && (!ignoreName || it.key != Metric.nameLabel) }.toSortedMap())
     }
 

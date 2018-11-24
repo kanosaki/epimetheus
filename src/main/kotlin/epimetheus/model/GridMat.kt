@@ -1,7 +1,6 @@
 package epimetheus.model
 
 import epimetheus.EpimetheusException
-import epimetheus.pkg.promql.PromQLException
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap
 import tech.tablesaw.api.StringColumn
 import tech.tablesaw.api.Table
@@ -35,7 +34,7 @@ class MatMatch(val mBase: GridMat, val mOther: GridMat, val matchIndex: IntArray
         if (baseIndex >= matchIndex.size) {
             throw RuntimeException("Invalid index: $baseIndex < ${matchIndex.size}")
         }
-        return mBase.metrics[baseIndex].filterWithout(true)
+        return mBase.metrics[baseIndex].filterWithout(true, listOf())
     }
 
     fun apply(fn: (lvals: DoubleArray, rvals: DoubleArray) -> DoubleArray): GridMat {
@@ -127,7 +126,7 @@ data class GridMat(val metrics: Array<Metric>, val timestamps: List<Long>, val v
 
     fun dropMetricName(): GridMat {
         val valuesMap = Long2ObjectOpenHashMap<DoubleArray>()
-        val metrics = metrics.map { it.filterWithout(true) }.toMutableList()
+        val metrics = metrics.map { it.filterWithout(true, listOf()) }.toMutableList()
         metrics.forEachIndexed { index, metric ->
             valuesMap[metric.fingerprint()] = values[index]
         }
