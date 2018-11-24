@@ -29,6 +29,16 @@ object Utils {
             String.format("%s", d)
     }
 
+    fun parseDouble(s: String?): Double? {
+        return when (s) {
+            null -> null
+            "+Inf" -> Double.POSITIVE_INFINITY
+            "Inf" -> Double.POSITIVE_INFINITY
+            "-Inf" -> Double.NEGATIVE_INFINITY
+            else -> s.toDoubleOrNull()
+        }
+    }
+
     fun quantile(q: Double, vs: DoubleArray): Double {
         if (vs.isEmpty()) {
             return Double.NaN

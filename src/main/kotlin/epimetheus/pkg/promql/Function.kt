@@ -3,6 +3,7 @@ package epimetheus.pkg.promql
 import epimetheus.EpimetheusException
 import epimetheus.engine.EvalNode
 import epimetheus.model.*
+import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap
 import java.time.Instant
 import java.time.YearMonth
 import java.time.ZoneId
@@ -270,7 +271,91 @@ data class Function(
                 Function("floor") { vals, _, node ->
                     simpleFn(vals[0] as GridMat, node, Math::floor)
                 },
-                Function("histogram_quantile", listOf(ValueType.Scalar, ValueType.Vector)) { vals, _, _ -> TODO() },
+                Function("histogram_quantile", listOf(ValueType.Scalar, ValueType.Vector)) { vals, _, _ ->
+                    val q = (vals[0] as Scalar).value
+                    val m = vals[1] as GridMat
+
+                    data class Bucket(val upperBound: Double, val count: Double)
+                    data class MetricWithBuckets(val metric: Metric, val buckets: MutableList<Bucket>)
+
+                    fun bucketQuantile(buckets: MutableList<Bucket>): Double {
+                        if (q < 0) {
+                            return Double.NEGATIVE_INFINITY
+                        }
+                        if (q > 1) {
+                            return Double.POSITIVE_INFINITY
+                        }
+                        if (buckets.size < 2) {
+                            return Double.NaN
+                        }
+                        buckets.sortBy { it.upperBound }
+                        fun ensureMonotonic(buckets: MutableList<Bucket>) {
+                            var max = buckets.first().count
+                            for (i in 1 until buckets.size) {
+                                when {
+                                    buckets[i].count > max -> max = buckets[i].count
+                                    buckets[i].count < max -> buckets[i] = Bucket(buckets[i].upperBound, max)
+                                }
+                            }
+                        }
+                        ensureMonotonic(buckets)
+                        var rank = q * buckets.last().count
+                        val b = buckets.indexOfFirst { it.count >= rank } // TODO: binary search
+                        if (b == buckets.size - 1) {
+                            return buckets[buckets.size - 2].upperBound
+                        }
+                        if (b == 0 && buckets.first().upperBound <= 0) {
+                            return buckets.first().upperBound
+                        }
+                        var bucketStart = 0.0
+                        val bucketEnd = buckets[b].upperBound
+                        var count = buckets[b].count
+                        if (b > 0) {
+                            bucketStart = buckets[b - 1].upperBound
+                            count -= buckets[b - 1].count
+                            rank -= buckets[b - 1].count
+                        }
+                        return bucketStart + (bucketEnd - bucketStart) * (rank / count)
+                    }
+
+                    fun sigf(met: Metric): Long {
+                        return met.filteredFingerprint(false, listOf(Metric.bucketLabel), true)
+                    }
+
+                    val columAccumlator = Array<List<Pair<Metric, Double>>>(m.timestamps.size) { emptyList() }
+
+                    for (tsIdx in 0 until m.timestamps.size) {
+                        val sigToMetBuckets = Long2ObjectOpenHashMap<MetricWithBuckets>()
+                        for (metIdx in 0 until m.metrics.size) {
+                            val met = m.metrics[metIdx]
+                            val upperBound = Utils.parseDouble(met.m[Metric.bucketLabel]) ?: continue // TODO: warn
+                            val hash = sigf(met)
+                            val mb = sigToMetBuckets[hash]
+                            if (mb == null) {
+                                val newMet = met.filterWithout(true, listOf(Metric.bucketLabel))
+                                sigToMetBuckets[hash] = MetricWithBuckets(newMet, mutableListOf(Bucket(upperBound, m.values[metIdx][tsIdx])))
+                            } else {
+                                mb.buckets.add(Bucket(upperBound, m.values[metIdx][tsIdx]))
+                            }
+                        }
+                        val res = mutableListOf<Pair<Metric, Double>>()
+                        sigToMetBuckets.values.forEach { mb ->
+                            if (!mb.buckets.isEmpty()) {
+                                res.add(mb.metric to bucketQuantile(mb.buckets))
+                            }
+                        }
+                        columAccumlator[tsIdx] = res
+                    }
+                    val metrics = columAccumlator
+                            .flatMap { col -> col.map { kv -> kv.first } }
+                            .distinct()
+                            .sortedBy { it.fingerprint() }
+                    GridMat(metrics.toTypedArray(), m.timestamps, metrics.map { met ->
+                        DoubleArray(m.timestamps.size) { tsIdx ->
+                            columAccumlator[tsIdx].firstOrNull { it.first == met }?.second ?: Mat.StaleValue
+                        }
+                    })
+                },
                 Function("holt_winters", listOf(ValueType.Matrix, ValueType.Scalar, ValueType.Scalar)) { vals, _, _ ->
                     val m = vals[0] as RangeGridMat
                     val sf = (vals[1] as Scalar).value // smoothing factor

@@ -77,6 +77,7 @@ open class Metric(val m: SortedMap<String, String>) {
     companion object {
         val SeparatorByte: Byte = 0xFF.toByte()
         val nameLabel = "__name__"
+        val bucketLabel = "le"
         val instanceLabel = "instance"
 
         val empty = Metric(sortedMapOf())
