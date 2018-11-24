@@ -247,7 +247,7 @@ object PromSpecTests {
      * Spec files ported from prometheus repository
      */
     @TestFactory
-    fun withMockGateway(): Collection<DynamicTest> {
+    fun withMockStorage(): Collection<DynamicTest> {
         val res = PromSpecTests::class.java.getResource("promspec/prometheus")
         val files = File(res.path).listFiles()
         return files.map {
@@ -261,7 +261,7 @@ object PromSpecTests {
 
     @Tag("slow")
     @TestFactory
-    fun withIgniteGateway(): Collection<DynamicTest> {
+    fun withIgniteStorage(): Collection<DynamicTest> {
         val res = PromSpecTests::class.java.getResource("promspec/prometheus")
         val files = File(res.path).listFiles()
         val conf = IgniteConfiguration().apply {
