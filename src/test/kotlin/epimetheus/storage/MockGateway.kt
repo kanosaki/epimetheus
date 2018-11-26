@@ -12,7 +12,7 @@ class MockGateway() : Gateway, MetricRegistry {
     val metrics = sortedMapOf<Signature, Metric>()
     override val metricRegistry = this
 
-    override fun pushScraped(instance: String, ts: Long, mets: Collection<ScrapedSample>) {
+    override fun pushScraped(instance: String, ts: Long, mets: Collection<ScrapedSample>, flush: Boolean) {
         mets.forEach {
             val met = Metric(it.m)
             val prev = datum.getOrDefault(met.fingerprint(), sortedMapOf())
@@ -60,6 +60,7 @@ class MockGateway() : Gateway, MetricRegistry {
                             }
                         }
                     }
+                    timestamps.trim()
                     Series(it, v.toDoubleArray(), timestamps.elements())
                 }
                 .sortedBy { it.metric.fingerprint() }

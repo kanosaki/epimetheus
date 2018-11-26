@@ -220,8 +220,9 @@ data class GridMat(val metrics: Array<Metric>, val timestamps: List<Long>, val v
          * Simply joins series
          */
         fun concatSeries(series: List<Series>, frames: List<Long>, offset: Long = 0L): GridMat {
-            val metrics = Array(series.size) { series[it].metric }
-            val values = series.map { it.values }
+            val nonStales = series.filter { s -> s.values.all { v-> !Mat.isStale(v) } }
+            val metrics = Array(nonStales.size) { nonStales[it].metric }
+            val values = nonStales.map { it.values }
             return GridMat(metrics, frames, values, offset)
         }
 

@@ -11,7 +11,7 @@ interface Gateway {
         val StaleSearchMilliseconds = 5 * 60 * 1000
     }
 
-    fun pushScraped(instance: String, ts: Long, mets: Collection<ScrapedSample>)
+    fun pushScraped(instance: String, ts: Long, mets: Collection<ScrapedSample>, flush: Boolean = true)
 
     fun collectInstant(query: MetricMatcher, range: TimeFrames, offset: Long = 0): GridMat
     /**
@@ -28,9 +28,9 @@ class IgniteGateway(private val ignite: Ignite) : Gateway, AutoCloseable {
     val aged = Aged(ignite)
     override val metricRegistry = IgniteMeta(ignite)
 
-    override fun pushScraped(instance: String, ts: Long, mets: Collection<ScrapedSample>) {
+    override fun pushScraped(instance: String, ts: Long, mets: Collection<ScrapedSample>, flush: Boolean) {
         metricRegistry.registerMetricsFromSamples(mets)
-        eden.push(instance, ts, mets)
+        eden.push(instance, ts, mets, flush)
     }
 
     override fun collectRange(query: MetricMatcher, frames: TimeFrames, range: Long, offset: Long): RangeGridMat {

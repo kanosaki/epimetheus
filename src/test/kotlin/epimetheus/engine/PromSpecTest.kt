@@ -1,14 +1,21 @@
 package epimetheus.engine
 
+import epimetheus.model.Mat
 import epimetheus.pkg.promql.NumberLiteral
 import epimetheus.storage.MockGateway
 import org.junit.jupiter.api.Test
 import java.time.Duration
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 // A test that tests test
 
 class PromSpecTest {
+    @Test
+    fun testStaleExpand() {
+        assertTrue(Mat.isStale(VStale(0).expand(null).first()!!))
+    }
+
     @Test
     fun testLoadCmd() {
         val ps = PromSpec(listOf(

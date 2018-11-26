@@ -267,6 +267,8 @@ object PromSpecTests {
         val conf = IgniteConfiguration().apply {
             igniteInstanceName = "promspec"
         }
+        // preload to measure test exec time accurately
+        Ignition.getOrStart(conf)
         return files.map {
             it.inputStream().use { input ->
                 val lines = IOUtils.readLines(input, Charsets.UTF_8)

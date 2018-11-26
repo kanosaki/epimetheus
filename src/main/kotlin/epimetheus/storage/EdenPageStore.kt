@@ -6,7 +6,6 @@ import epimetheus.model.Metric
 import epimetheus.model.Series
 import epimetheus.model.TimeFrames
 import epimetheus.pkg.textparse.ScrapedSample
-import it.unimi.dsi.fastutil.doubles.DoubleArrayList
 import it.unimi.dsi.fastutil.longs.Long2DoubleRBTreeMap
 import it.unimi.dsi.fastutil.longs.LongArrayList
 import org.apache.ignite.Ignite
@@ -14,6 +13,7 @@ import org.apache.ignite.cache.affinity.AffinityKeyMapped
 import org.apache.ignite.cache.query.annotations.QuerySqlField
 import org.apache.ignite.configuration.CacheConfiguration
 import org.apache.ignite.stream.StreamTransformer
+import java.util.*
 
 
 data class EdenPageKey(
@@ -21,7 +21,7 @@ data class EdenPageKey(
         @QuerySqlField(notNull = true) val metricID: Long,
         @QuerySqlField(notNull = true) val timestamp: Long)
 
-data class EdenPage(val values: DoubleArrayList, val timestamps: LongArrayList) {
+data class EdenPage(val values: DoubleArray, val timestamps: LongArray) {
 }
 
 /**
@@ -52,26 +52,28 @@ class EdenPageStore(val ignite: Ignite, val windowSize: Long = 5 * 60 * 1000) : 
                 entry.value = EdenPage(sample.values, sample.timestamps)
             } else {
                 val v = entry.value
-                v.values.addElements(v.values.size, sample.values.elements())
-                v.timestamps.addElements(v.timestamps.size, sample.timestamps.elements())
-                entry.value = EdenPage(v.values, v.timestamps) // renew instance to take effect
+                val newVals = Arrays.copyOf(v.values, v.values.size + sample.values.size)
+                System.arraycopy(sample.values, 0, newVals, v.values.size, sample.values.size)
+                val newTimestamps = Arrays.copyOf(v.timestamps, v.timestamps.size + sample.timestamps.size)
+                System.arraycopy(sample.timestamps, 0, newTimestamps, v.timestamps.size, sample.timestamps.size)
+                entry.value = EdenPage(newVals, newTimestamps) // renew instance to take effect
             }
             return@from null
         })
     }
 
-    fun push(instance: String, ts: Long, samples: Collection<ScrapedSample>) {
+    fun push(instance: String, ts: Long, samples: Collection<ScrapedSample>, flush: Boolean = true) {
         samples.forEach { s ->
             val metricID = Metric.labelsFingerprintFNV(s.m)
-            streamer.addData(
-                    EdenPageKey(instance, metricID, windowKey(ts)),
-                    EdenPage(
-                            DoubleArrayList(doubleArrayOf(s.value)),
-                            LongArrayList(longArrayOf(ts))
-                    )
+            val p = EdenPage(
+                    doubleArrayOf(s.value),
+                    longArrayOf(ts)
             )
+            streamer.addData(EdenPageKey(instance, metricID, windowKey(ts)), p)
         }
-        streamer.flush() // should be async, but put/get consistency might be required for testing
+        if (flush) {
+            streamer.flush() // should be async, but put/get consistency might be required for testing
+        }
     }
 
     fun collectRange(metric: Metric, frames: TimeFrames, range: Long, offset: Long): List<Pair<LongArray, DoubleArray>> {
@@ -84,7 +86,7 @@ class EdenPageStore(val ignite: Ignite, val windowSize: Long = 5 * 60 * 1000) : 
             while (true) {
                 val wk = windowKey(t, pageDelta)
                 collectingKeys.add(EdenPageKey(instance, metricID, wk))
-                if (wk <= 0 || t - wk < range) {
+                if (wk <= 0 || t - wk >= range) {
                     break
                 }
                 pageDelta--
@@ -94,7 +96,7 @@ class EdenPageStore(val ignite: Ignite, val windowSize: Long = 5 * 60 * 1000) : 
         cache.getEntries(collectingKeys).forEach {
             val v = it.value
             for (i in 0 until v.values.size) {
-                m[v.timestamps.getLong(i)] = v.values.getDouble(i)
+                m[v.timestamps[i]] = v.values[i]
             }
         }
         return frames.map { originalTs ->
@@ -125,25 +127,31 @@ class EdenPageStore(val ignite: Ignite, val windowSize: Long = 5 * 60 * 1000) : 
         cache.getEntries(collectingKeys).forEach {
             val v = it.value
             for (i in 0 until v.values.size) {
-                m[v.timestamps.getLong(i)] = v.values.getDouble(i)
+                m[v.timestamps[i]] = v.values[i]
             }
         }
+        val timestamps = LongArrayList()
         val values = DoubleArray(range.size) {
             val originalTs = range[it]
             val t = originalTs - offset
             val subMap = m.headMap(t + 1)
             if (subMap.isEmpty()) {
+                timestamps.add(originalTs)
                 Mat.StaleValue
             } else {
                 val lastKey = subMap.lastLongKey()
-                if (t - lastKey > windowSize) {
+                val delta = t - lastKey
+                if (delta > 5 * 60 * 1000) {
+                    timestamps.add(originalTs)
                     Mat.StaleValue
                 } else {
-                    subMap.get(lastKey)
+                    timestamps.add(lastKey)
+                    subMap[lastKey]
                 }
             }
         }
-        return Series(metric, values, range.toLongArray())
+        timestamps.trim()
+        return Series(metric, values, timestamps.elements())
     }
 
     override fun close() {
