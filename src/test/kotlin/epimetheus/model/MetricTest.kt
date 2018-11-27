@@ -51,7 +51,7 @@ class MetricTest {
         val results = LongArray(sampleCount)
         val begin = System.nanoTime()
         for (i in 0 until sampleCount) {
-            results[i] = Metric.labelsFingerprintXXHash(mets[i].m)
+            results[i] = Metric.labelsFingerprintFNV(mets[i].m)
         }
         val elapsed = System.nanoTime() - begin
         val unieuqnessMap = HashSet<Signature>(sampleCount)
