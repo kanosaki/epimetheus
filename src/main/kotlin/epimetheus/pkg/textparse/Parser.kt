@@ -1,29 +1,34 @@
 package epimetheus.pkg.textparse
 
 import epimetheus.model.Metric
+import epimetheus.model.MetricBuilder
 import epimetheus.pkg.promql.PromQL
 import epimetheus.pkg.promql.PromQLException
 import org.antlr.v4.runtime.CharStream
 import org.antlr.v4.runtime.CommonTokenStream
-import java.util.*
 
 
 class InvalidSpecLine(msg: String) : RuntimeException(msg)
 
 
-data class ScrapedSample(val m: SortedMap<String, String>, val value: Double) {
+data class ScrapedSample(val met: Metric, val value: Double) {
     companion object {
-        val m = sortedMapOf(Metric.nameLabel to "__ignored__")
+        val m = Metric.of("__ignored__")
         val Ignored = ScrapedSample(m, 0.0)
 
         fun create(name: String, value: Double, vararg pairs: Pair<String, String>): ScrapedSample {
-            return ScrapedSample(sortedMapOf(Metric.nameLabel to name, *pairs), value)
+            val mb = MetricBuilder()
+            mb.put(Metric.nameLabel, name)
+            for (i in 0 until pairs.size) {
+                mb.put(pairs[i].first, pairs[i].second)
+            }
+            return ScrapedSample(mb.build(), value)
         }
     }
 
     override fun toString(): String {
-        val nonNameLabels = m.filter { e -> e.key != Metric.nameLabel }
-        return "${m[Metric.nameLabel]}$nonNameLabels $value"
+        val nonNameLabels = met.labels().filter { e -> e.first != Metric.nameLabel }
+        return "${met.get(Metric.nameLabel)}$nonNameLabels $value"
     }
 }
 
@@ -69,17 +74,17 @@ object ExporterParser {
         }
     }
 
-    class MetricVisitor: PromExporterParserBaseVisitor<Metric>() {
+    class MetricVisitor : PromExporterParserBaseVisitor<Metric>() {
         override fun visitMetric(ctx: PromExporterParser.MetricContext?): Metric {
+            val mb = MetricBuilder()
             val name = ctx!!.metricName().text
-            val labels = mutableMapOf<String, String>()
+            mb.put(Metric.nameLabel, name)
             if (ctx.labelBrace() != null) {
                 ctx.labelBrace().label().forEach { c ->
-                    labels[c.NAME().text] = c.stringLiteral().STRINGCONTENT().text.removeSuffix("\"")
+                    mb.put(c.NAME().text, c.stringLiteral().STRINGCONTENT().text.removeSuffix("\""))
                 }
             }
-            labels[Metric.nameLabel] = name
-            return Metric(labels.toSortedMap())
+            return mb.build()
         }
     }
 
@@ -91,7 +96,7 @@ object ExporterParser {
             return if (value == null) {
                 ScrapedSample.Ignored
             } else {
-                ScrapedSample(met.m, value)
+                ScrapedSample(met, value)
             }
         }
     }

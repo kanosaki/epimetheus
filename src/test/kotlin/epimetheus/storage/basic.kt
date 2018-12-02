@@ -87,17 +87,13 @@ class TestStorageIgnite {
         val meta = IgniteMeta(ignite)
         val samplesCount = 10000
         meta.registerMetricsFromSamples((0 until samplesCount).map { ScrapedSample.create("test$it", 0.0) })
-        val begin = System.nanoTime()
         val lucene = meta.lookupMetrics(MetricMatcher.nameMatch("test*")).toList()
-        val luceneEnd = System.nanoTime()
         val regex = meta.lookupMetrics(MetricMatcher.nameMatch("test.*", true)).toList()
-        val regexEnd = System.nanoTime()
         val sorted = lucene.sortedBy { it.fingerprint() }
         assertEquals(lucene.size, samplesCount)
         assertEquals(regex.size, samplesCount)
         assertEquals(sorted.map { it.fingerprint() }, lucene.map { it.fingerprint() })
         assertEquals(sorted.map { it.fingerprint() }, regex.map { it.fingerprint() })
-        println("Lookup metrics: Lucene ${(luceneEnd - begin) / 1000 / 1000}ms, Regex ${(regexEnd - luceneEnd) / 1000 / 1000}ms")
     }
 
     @Test
@@ -145,7 +141,7 @@ object GatewayTest {
         }
 
         fun met(name: String, instance: String): Metric {
-            return Metric(sortedMapOf("__name__" to name, "instance" to instance))
+            return Metric.of(name, "instance" to instance)
         }
 
         val actual = storage.collectInstant(MetricMatcher.nameMatch("x.*", true), TimeFrames(5, 25, 10))
@@ -184,7 +180,7 @@ object GatewayTest {
         }
 
         fun met(name: String, instance: String): Metric {
-            return Metric(sortedMapOf("__name__" to name, "instance" to instance))
+            return Metric.of(name, "instance" to instance)
         }
 
         val tf = TimeFrames(20, 60, 20)
@@ -233,7 +229,7 @@ object GatewayTest {
         storage.pushScraped("a:123", 1 * 60 * 1000, listOf(ScrapedSample.create("xy", 1.0, "instance" to "a:123")))
 
         fun met(name: String, instance: String): Metric {
-            return Metric(sortedMapOf("__name__" to name, "instance" to instance))
+            return Metric.of(name, "instance" to instance)
         }
 
         listOf(

@@ -28,28 +28,28 @@ public class FingerprintBenchmark {
     @Benchmark
     public void fnvAll() {
         for (int i = 0; i < samplesCount; i++) {
-            Metric.Companion.labelsFingerprintFNV(metrics[i].getM());
+            Metric.Companion.labelsFingerprintFNV(metrics[i].toSortedMap());
         }
     }
 
     @Benchmark
     public void xxHashAll() {
         for (int i = 0; i < samplesCount; i++) {
-            Metric.Companion.labelsFingerprintXXHash(metrics[i].getM());
+            Metric.Companion.labelsFingerprintXXHash(metrics[i].toSortedMap());
         }
     }
 
     @Benchmark
     public void fnvFilteredOn() {
         for (int i = 0; i < samplesCount; i++) {
-            Metric.Companion.labelFilteredFingerprintFNV(true, metrics[i].getM(), filtering, true);
+            Metric.Companion.labelFilteredFingerprintFNV(true, metrics[i].getLbls(), filtering, true);
         }
     }
 
     @Benchmark
     public void fnvFilteredWithout() {
         for (int i = 0; i < samplesCount; i++) {
-            Metric.Companion.labelFilteredFingerprintFNV(false, metrics[i].getM(), filtering, true);
+            Metric.Companion.labelFilteredFingerprintFNV(false, metrics[i].getLbls(), filtering, true);
         }
     }
 

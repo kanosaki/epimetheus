@@ -6,3 +6,4 @@ gen/
 build/
 src/main/gen/
 .idea/
+file-uploads/

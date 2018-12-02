@@ -173,7 +173,7 @@ class PromSpec(val lines: List<String>, val storageFactory: () -> Gateway) : Exe
             } else {
                 val series = specs.map {
                     it as SpecSeriesDesc
-                    Metric(it.m) to Mat.mapValue(it.expand(null))
+                    Metric.fromSrotedMap(it.m) to Mat.mapValue(it.expand(null))
                 }.sortedBy { it.first.fingerprint() }
                 GridMat(series.map { it.first }.toTypedArray(), tf, series.map { it.second })
             }

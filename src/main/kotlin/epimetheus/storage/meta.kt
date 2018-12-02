@@ -36,8 +36,8 @@ class IgniteMeta(val ignite: Ignite) : Meta, AutoCloseable {
 
     override fun registerMetricsFromSamples(samples: Collection<ScrapedSample>) {
         samples.forEach {
-            val name = it.m[Metric.nameLabel]!!
-            val met = Metric(it.m)
+            val name = it.met.name() ?: ""
+            val met = it.met
             metricMeta.putIfAbsent(met.fingerprint(), MetricInfo(name, met))
         }
     }

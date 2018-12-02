@@ -289,10 +289,12 @@ data class Aggregator(
                         val baseMet = when (g?.typ) {
                             AggregatorGroupType.By -> m.metrics[metId].filterOn(g.labels)
                             AggregatorGroupType.Without -> m.metrics[metId].filterWithout(true, g.labels)
-                            else -> Metric(sortedMapOf())
+                            else -> Metric.empty
                         }
                         val v = m.values[metId][tsIdx]
-                        val met = Metric(sortedMapOf(*baseMet.m.entries.map { it.key to it.value }.toTypedArray(), targetLabel to Utils.fmtDouble(v)))
+                        val mb = baseMet.builder()
+                        mb.put(targetLabel, Utils.fmtDouble(v))
+                        val met = mb.build()
                         val fp = met.fingerprint()
                         metCache[fp] = met
                         return fp

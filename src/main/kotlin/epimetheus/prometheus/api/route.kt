@@ -65,7 +65,7 @@ class APIHandlerFactory(val vertx: Vertx, val gateway: Gateway) {
                         val meta = gateway.metricRegistry as Meta
                         val name = ctx.pathParam("name") ?: throw InvalidRequestException("neve here")
                         val mets = meta.lookupMetrics(MetricMatcher(listOf(name to LabelMatcher(LabelMatchType.Match, ".*"))))
-                        ctx.response().end(Json.encode(Response("success", mets.map { it.m[name] }, null, null)))
+                        ctx.response().end(Json.encode(Response("success", mets.map { it.get(name) }, null, null)))
                     }
             route("/query_range")
                     .handler { ctx ->
@@ -93,7 +93,7 @@ class APIHandlerFactory(val vertx: Vertx, val gateway: Gateway) {
                             val rm = gateway.collectRange(it, TimeFrames.instant(endMs), endMs - startMs)
                             rm.metrics
                         }
-                        r.end(Json.encode(Response("success", mets.map { it.m }, null, null)))
+                        r.end(Json.encode(Response("success", mets.map { it.toSortedMap() }, null, null)))
                     }
         }
     }

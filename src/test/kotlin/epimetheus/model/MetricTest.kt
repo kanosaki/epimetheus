@@ -9,8 +9,11 @@ import kotlin.test.fail
 class MetricTest {
     @Test
     fun testMetricOf() {
+        val mb = MetricBuilder()
+        mb.put(Metric.nameLabel, "a")
+        mb.put("bar", "baz")
         assertEquals(
-                Metric(sortedMapOf(Metric.nameLabel to "a", "bar" to "baz")),
+                mb.build(),
                 Metric.of("a", "bar" to "baz")
         )
     }
@@ -41,40 +44,14 @@ class MetricTest {
         assertEquals(s1, s2)
     }
 
-    /**
-     * Generates many sample metrics and calc its fingerprints. And ensure there is no duplicated fingerprint.
-     */
-    @Test
-    fun testFingerprintUniqueness() {
-        val sampleCount = 10000
-        val mets = (0 until sampleCount).map { Metric.of("a", "num" to it.toString(), "foo" to "hogehgoe") }.toTypedArray()
-        val results = LongArray(sampleCount)
-        val begin = System.nanoTime()
-        for (i in 0 until sampleCount) {
-            results[i] = Metric.labelsFingerprintFNV(mets[i].m)
-        }
-        val elapsed = System.nanoTime() - begin
-        val unieuqnessMap = HashSet<Signature>(sampleCount)
-        results.forEachIndexed { index, sig ->
-            if (unieuqnessMap.contains(sig)) {
-                fail("Uniqueness broken! at index: $index")
-            } else {
-                unieuqnessMap.add(sig)
-            }
-        }
-        println("Generated $sampleCount fingerprints: takes ${elapsed / sampleCount}ns per fingerprint")
-    }
-
     @Test
     fun testFingerprintUniquenessFNV() {
-        val sampleCount = 100000
-        val mets = (0 until sampleCount).map { Metric.of("a", "num" to it.toString(), "foo" to "hogehgoe") }.toTypedArray()
+        val sampleCount = 10000
         val results = LongArray(sampleCount)
-        val begin = System.nanoTime()
+        val mets = (0 until sampleCount).map { Metric.of("a", "num" to it.toString(), "foo" to "hogehgoe") }.toTypedArray()
         for (i in 0 until sampleCount) {
-            results[i] = Metric.labelsFingerprintFNV(mets[i].m)
+            results[i] = mets[i].fingerprint()
         }
-        val elapsed = System.nanoTime() - begin
         val unieuqnessMap = HashSet<Signature>(sampleCount)
         results.forEachIndexed { index, sig ->
             if (unieuqnessMap.contains(sig)) {
@@ -83,7 +60,6 @@ class MetricTest {
                 unieuqnessMap.add(sig)
             }
         }
-        println("FNV: Generated $sampleCount fingerprints: takes ${elapsed / sampleCount}ns per fingerprint")
     }
 
     @Test

@@ -56,9 +56,10 @@ class ScrapeDispatcher : Service {
 
     private fun writeSamples(target: ScrapeTargetName, jobName: String, results: List<ScrapedSample>) {
         storage.pushScraped(target.target, System.currentTimeMillis(), results.map {
-            it.m["instance"] = target.target
-            it.m["job"] = jobName
-            ScrapedSample(it.m, it.value)
+            val mb = it.met.builder()
+            mb.put("instance", target.target)
+            mb.put("job", jobName)
+            ScrapedSample(mb.build(), it.value)
         })
     }
 

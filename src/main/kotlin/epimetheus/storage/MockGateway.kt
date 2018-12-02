@@ -14,7 +14,7 @@ class MockGateway() : Gateway, MetricRegistry {
 
     override fun pushScraped(instance: String, ts: Long, mets: Collection<ScrapedSample>, flush: Boolean) {
         mets.forEach {
-            val met = Metric(it.m)
+            val met = it.met
             val prev = datum.getOrDefault(met.fingerprint(), sortedMapOf())
             prev[ts] = it.value
             datum[met.fingerprint()] = prev

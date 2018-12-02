@@ -77,7 +77,7 @@ class IgniteGateway(private val ignite: Ignite) : Gateway, AutoCloseable {
                 val samples = mutableListOf<ScrapedSample>()
                 for (c in 1 until columns.size) {
                     val v = g.getDouble(c, 0)
-                    samples.add(ScrapedSample(mets[c - 1].m, v))
+                    samples.add(ScrapedSample(mets[c - 1], v))
                 }
                 this.pushScraped("", ts, samples, false)
             }

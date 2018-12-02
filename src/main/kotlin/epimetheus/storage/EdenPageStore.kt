@@ -64,7 +64,7 @@ class EdenPageStore(val ignite: Ignite, val windowSize: Long = 5 * 60 * 1000) : 
 
     fun push(instance: String, ts: Long, samples: Collection<ScrapedSample>, flush: Boolean = true) {
         samples.forEach { s ->
-            val metricID = Metric.labelsFingerprintFNV(s.m)
+            val metricID = s.met.fingerprint()
             val p = EdenPage(
                     doubleArrayOf(s.value),
                     longArrayOf(ts)
@@ -78,7 +78,7 @@ class EdenPageStore(val ignite: Ignite, val windowSize: Long = 5 * 60 * 1000) : 
     }
 
     fun collectRange(metric: Metric, frames: TimeFrames, range: Long, offset: Long): List<Pair<LongArray, DoubleArray>> {
-        val instance = metric.m[Metric.instanceLabel] ?: ""
+        val instance = metric.get(Metric.instanceLabel) ?: ""
         val metricID = metric.fingerprint()
         val collectingKeys = mutableSetOf<EdenPageKey>()
         for (originalTs in frames) {
@@ -117,7 +117,7 @@ class EdenPageStore(val ignite: Ignite, val windowSize: Long = 5 * 60 * 1000) : 
     }
 
     fun collectInstant(metric: Metric, range: TimeFrames, offset: Long): Series {
-        val instance = metric.m[Metric.instanceLabel] ?: ""
+        val instance = metric.get(Metric.instanceLabel) ?: ""
         val metricID = metric.fingerprint()
         val collectingKeys = mutableSetOf<EdenPageKey>()
         for (t in range) {

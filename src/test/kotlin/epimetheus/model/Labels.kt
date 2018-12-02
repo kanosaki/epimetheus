@@ -31,13 +31,13 @@ class MetricMatcherTest {
                 "hoge" to LabelMatcher(LabelMatchType.Neq, "fuga")
         ))
         listOf(
-                Metric(sortedMapOf("foo" to "bar")),
-                Metric(sortedMapOf("foo" to "bar", "hoge" to "piyo")),
-                Metric(sortedMapOf("foo" to "bar", "hoge" to "123", "extra" to "foobar"))
+                Metric.of("n", "foo" to "bar"),
+                Metric.of("n", "foo" to "bar", "hoge" to "piyo"),
+                Metric.of("n", "foo" to "bar", "hoge" to "123", "extra" to "foobar")
         ).forEach { assertTrue { basic.matches(it) } }
 
         listOf(
-                Metric(sortedMapOf("foo" to "bar", "hoge" to "fuga"))
+                Metric.of("n", "foo" to "bar", "hoge" to "fuga")
         ).forEach { assertFalse { basic.matches(it) } }
 
     }

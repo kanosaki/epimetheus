@@ -7,6 +7,7 @@ import org.apache.commons.pool2.impl.DefaultPooledObject
 import org.apache.commons.pool2.impl.GenericObjectPool
 import java.nio.ByteBuffer
 import java.util.*
+import kotlin.collections.ArrayList
 
 
 class UndefinedMetricIDException(metricId: Long) : RuntimeException("MetricID: $metricId is not registered")
@@ -17,13 +18,99 @@ interface MetricRegistry {
     }
 }
 
-open class Metric(val m: SortedMap<String, String>) {
-    fun canonicalizedID(): String {
-        return labelsCanonicalizedID(m)
+class MetricBuilder(val labels: MutableList<Array<String>> = mutableListOf()) : Metric(labels) {
+    private fun searchKey(key: String): Int {
+        return Collections.binarySearch(labels, key) { o1, o2 ->
+            val l1 = o1 as Array<*>
+            val k = o2 as String
+            (l1[0] as String).compareTo(k)
+        }
     }
 
+    fun putOrRemove(key: String, value: String?) {
+        if (value == null) {
+            remove(key)
+        } else {
+            put(key, value)
+        }
+    }
+
+    fun put(key: String, value: String) {
+        val idx = searchKey(key)
+        if (idx < 0) {
+            labels.add(idx.inv(), arrayOf(key, value))
+        } else {
+            labels[idx] = arrayOf(key, value)
+        }
+    }
+
+    fun remove(key: String) {
+        val idx = searchKey(key)
+        if (idx >= 0) {
+            labels.removeAt(idx)
+        }
+    }
+
+    inline fun removeIf(crossinline fn: (String, String) -> Boolean) {
+        labels.removeIf {
+            fn(it[0], it[1])
+        }
+    }
+
+    fun build(): Metric {
+        labels.sortBy { it[0] }
+        return Metric(labels)
+    }
+}
+
+open class Metric(val lbls: List<Array<String>>) {
+    private val fp = computeFingerprint()
+
     fun fingerprint(): Signature {
-        return labelsFingerprintFNV(m)
+        return fp
+    }
+
+    private fun computeFingerprint(): Signature {
+        var res = FNV64.create()
+        for (i in 0 until lbls.size) {
+            val k = lbls[i][0]
+            val v = lbls[i][1]
+            var sum = FNV64.create()
+            sum = FNV64.update(sum, k)
+            sum = FNV64.update(sum, SeparatorByte)
+            sum = FNV64.update(sum, v)
+            sum = FNV64.update(sum, SeparatorByte)
+            res = res xor sum
+        }
+        return res
+    }
+
+    private fun searchKey(key: String): Int {
+        return Collections.binarySearch(lbls, key) { o1, o2 ->
+            val l1 = o1 as Array<*>
+            (l1[0] as String).compareTo(o2 as String)
+        }
+    }
+
+    fun get(key: String): String? {
+        val idx = searchKey(key)
+        return if (idx < 0) {
+            null
+        } else {
+            lbls[idx][1]
+        }
+    }
+
+    fun builder(): MetricBuilder {
+        return MetricBuilder(lbls.toMutableList())
+    }
+
+    fun labels(): List<Pair<String, String>> {
+        return lbls.map { it[0] to it[1] }
+    }
+
+    fun toSortedMap(): SortedMap<String, String> {
+        return sortedMapOf(*lbls.map { it[0] to it[1] }.toTypedArray())
     }
 
     /**
@@ -31,24 +118,24 @@ open class Metric(val m: SortedMap<String, String>) {
      * on: false -> calc fingerprint WITHOUT specified label values (`ignoring` mode)
      */
     fun filteredFingerprint(on: Boolean, labels: Collection<String>, withoutNameLabel: Boolean = false): Signature {
-        return labelFilteredFingerprintFNV(on, m, labels, withoutNameLabel)
+        return labelFilteredFingerprintFNV(on, lbls, labels, withoutNameLabel)
     }
 
-    fun name(): String {
-        return m[nameLabel]!!
+    fun name(): String? {
+        return get(nameLabel)
     }
 
     fun filterOn(onLabels: List<String>): Metric {
-        return Metric(m.filter { onLabels.contains(it.key) }.toSortedMap())
+        return Metric(lbls.filter { onLabels.contains(it[0]) }.toMutableList())
     }
 
     fun filterWithout(ignoreName: Boolean, ignoreLabels: List<String>): Metric {
-        return Metric(m.filter { !ignoreLabels.contains(it.key) && (!ignoreName || it.key != Metric.nameLabel) }.toSortedMap())
+        return Metric(lbls.filter { !ignoreLabels.contains(it[0]) && (!ignoreName || it[0] != Metric.nameLabel) }.toMutableList())
     }
 
     override fun toString(): String {
-        val labelsExpr = m.filter { it.key != nameLabel }.map { "${it.key}=\"${it.value}\"" }.joinToString(",")
-        val n = m[nameLabel]
+        val labelsExpr = lbls.filter { it[0] != nameLabel }.map { "${it[0]}=\"${it[1]}\"" }.joinToString(",")
+        val n = name()
         val nameLabel = when (n) {
             null -> ""
             "" -> "\"\""
@@ -61,17 +148,23 @@ open class Metric(val m: SortedMap<String, String>) {
         if (other === null) {
             return false
         }
+        if (other === this) {
+            return true
+        }
         val o = other as? Metric ?: return false
-        if (o.m.size != this.m.size) {
+        if (o.lbls.size != this.lbls.size) {
             return false
         }
-        return this.m.all { kv ->
-            o.m[kv.key] == kv.value
+        for (i in 0 until lbls.size) {
+            if (lbls[i][0] != o.lbls[i][0] || lbls[i][1] != o.lbls[i][1]) {
+                return false
+            }
         }
+        return true
     }
 
     override fun hashCode(): Int {
-        return m.hashCode()
+        return fingerprint().toInt()
     }
 
     companion object {
@@ -80,7 +173,7 @@ open class Metric(val m: SortedMap<String, String>) {
         val bucketLabel = "le"
         val instanceLabel = "instance"
 
-        val empty = Metric(sortedMapOf())
+        val empty = Metric(mutableListOf())
 
         val factory = XXHashFactory.fastestInstance()
 
@@ -98,30 +191,30 @@ open class Metric(val m: SortedMap<String, String>) {
             }
         })
 
+        fun fromSrotedMap(sm: SortedMap<String, String>): Metric {
+            return Metric(sm.entries.map { arrayOf(it.key, it.value) })
+        }
+
         fun of(name: String, vararg labels: Pair<String, String>): Metric {
-            return Metric(sortedMapOf(nameLabel to name, *labels))
-        }
-
-        fun labelsCanonicalizedID(m: SortedMap<String, String>): String {
-            val sb = StringBuilder()
-            m.forEach { k, v ->
-                sb.append(k)
-                sb.append('=')
-                sb.append(v)
-                sb.append('\uffff')
+            val al = ArrayList<Array<String>>(labels.size + 1)
+            for (i in 0 until labels.size) {
+                al.add(arrayOf(labels[i].first, labels[i].second))
             }
-            return sb.toString()
+            al.add(arrayOf(nameLabel, name))
+            al.sortBy { it[0] }
+            return Metric(al)
         }
 
-
-        fun labelFilteredFingerprintFNV(on: Boolean, m: SortedMap<String, String>, onLabels: Collection<String>, excludeNameLabel: Boolean): Signature {
+        fun labelFilteredFingerprintFNV(on: Boolean, m: List<Array<String>>, onLabels: Collection<String>, excludeNameLabel: Boolean): Signature {
             var res = FNV64.create()
-            m.forEach { k, v ->
+            for (i in 0 until m.size) {
+                val k = m[i][0]
+                val v = m[i][1]
                 if ((!on) xor onLabels.contains(k) && (!excludeNameLabel || k != nameLabel)) {
                     var sum = FNV64.create()
-                    sum = FNV64.update(sum, k.toByteArray())
+                    sum = FNV64.update(sum, k)
                     sum = FNV64.update(sum, SeparatorByte)
-                    sum = FNV64.update(sum, v.toByteArray())
+                    sum = FNV64.update(sum, v)
                     sum = FNV64.update(sum, SeparatorByte)
                     res = res xor sum
                 }

@@ -58,7 +58,7 @@ object Util {
                     mr.timestamps.forEachIndexed { i, t ->
                         values += listOf(t.toDouble() / 1e3, mr.values[i].toString())
                     }
-                    series += SeriesResult(mr.metric.m, values)
+                    series += SeriesResult(mr.metric.toSortedMap(), values)
                 }
                 Result(resultType, series)
             }

@@ -175,10 +175,8 @@ data class Function(
                     val newMet = if (a0 is InstantSelector) {
                         val resSel = a0.matcher.matchers
                                 .filter { it.second.lmt == LabelMatchType.Eq && it.second.value != Metric.nameLabel }
-                                .map { it.first to it.second.value }
-                                .toMap()
-                                .toSortedMap()
-                        Metric(resSel)
+                                .map { arrayOf(it.first, it.second.value) }
+                        MetricBuilder(resSel.toMutableList()).build()
                     } else {
                         Metric.empty
                     }
@@ -328,7 +326,7 @@ data class Function(
                         val sigToMetBuckets = Long2ObjectOpenHashMap<MetricWithBuckets>()
                         for (metIdx in 0 until m.metrics.size) {
                             val met = m.metrics[metIdx]
-                            val upperBound = Utils.parseDouble(met.m[Metric.bucketLabel]) ?: continue // TODO: warn
+                            val upperBound = Utils.parseDouble(met.get(Metric.bucketLabel)) ?: continue // TODO: warn
                             val hash = sigf(met)
                             val mb = sigToMetBuckets[hash]
                             if (mb == null) {
@@ -352,7 +350,9 @@ data class Function(
                             .sortedBy { it.fingerprint() }
                     GridMat(metrics.toTypedArray(), m.timestamps, metrics.map { met ->
                         DoubleArray(m.timestamps.size) { tsIdx ->
-                            columAccumlator[tsIdx].firstOrNull { it.first == met }?.second ?: Mat.StaleValue
+                            columAccumlator[tsIdx].firstOrNull {
+                                it.first == met
+                            }?.second ?: Mat.StaleValue
                         }
                     })
                 },
@@ -414,7 +414,7 @@ data class Function(
                         val replacePat = Regex("""\$(\d+)""")
                         val pat = Regex(regexStr.value)
                         val replacedMetrics = m.metrics.map {
-                            val srcVal = it.m[src.value] ?: ""
+                            val srcVal = it.get(src.value) ?: ""
                             val match = pat.matchEntire(srcVal)
                             if (match == null) {
                                 return@map it
@@ -424,16 +424,16 @@ data class Function(
                                     val replIndex = g0.value.toInt()
                                     match.groups[replIndex]?.value ?: ""
                                 }
-                                val newMet = it.m.toSortedMap() // copy needs here
                                 if (!Utils.isValidLabelName(dst.value)) {
                                     throw PromQLException("${dst.value} is invalid as a label")
                                 }
+                                val mb = it.builder()
                                 if (dstVal.isEmpty()) {
-                                    newMet.remove(dst.value)
+                                    mb.remove(dst.value)
                                 } else {
-                                    newMet[dst.value] = dstVal
+                                    mb.put(dst.value, dstVal)
                                 }
-                                return@map Metric(newMet)
+                                return@map mb.build()
                             }
                         }
                         try {
@@ -458,17 +458,17 @@ data class Function(
                     }
                     try {
                         val replacedMetrics = m.metrics.map { met ->
-                            val dstVal = sources.joinToString(sep.value) { srcMet -> met.m[srcMet] ?: "" }
-                            val newMet = met.m.toSortedMap() // copy needs here
-                            if (dstVal.isEmpty()) {
-                                newMet.remove(dst.value)
-                            } else {
-                                newMet[dst.value] = dstVal
-                            }
+                            val dstVal = sources.joinToString(sep.value) { srcMet -> met.get(srcMet) ?: "" }
+                            val mb = met.builder()
                             if (!Utils.isValidLabelName(dst.value)) {
                                 throw PromQLException("${dst.value} is invalid as a label")
                             }
-                            return@map Metric(newMet)
+                            if (dstVal.isEmpty()) {
+                                mb.remove(dst.value)
+                            } else {
+                                mb.put(dst.value, dstVal)
+                            }
+                            return@map mb.build()
                         }
                         try {
                             GridMat.withSortting(replacedMetrics, m.timestamps, m.values)

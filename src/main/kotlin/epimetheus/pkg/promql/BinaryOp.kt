@@ -12,30 +12,26 @@ abstract class BinaryOp {
     abstract fun eval(lhs: Value, rhs: Value, matching: VectorMatching): Value
 
     protected fun resultMetric(lhsMet: Metric, rhsMet: Metric, matching: VectorMatching): Metric {
-        val m = lhsMet.m.toSortedMap()
+        val mb = lhsMet.builder()
         if (shouldDropMetricName) {
-            m.remove(Metric.nameLabel)
+            mb.remove(Metric.nameLabel)
         }
         if (matching.card == VectorMatchingCardinality.OneToOne) {
             if (matching.on) {
-                val removing = m.filter { !matching.matchingLabels.contains(it.key) }
-                removing.forEach {
-                    m.remove(it.key)
+                mb.removeIf { k, v ->
+                    !matching.matchingLabels.contains(k)
                 }
             } else {
-                matching.matchingLabels.forEach {
-                    m.remove(it)
+                mb.removeIf { k, v ->
+                    matching.matchingLabels.contains(k)
                 }
             }
         }
         for (inc in matching.include) {
-            if (rhsMet.m.containsKey(inc)) {
-                m[inc] = rhsMet.m[inc]
-            } else {
-                m.remove(inc)
-            }
+            val incMet = rhsMet.get(inc)
+            mb.putOrRemove(inc, incMet)
         }
-        return Metric(m)
+        return mb.build()
     }
 
     data class ArithAndLogical(

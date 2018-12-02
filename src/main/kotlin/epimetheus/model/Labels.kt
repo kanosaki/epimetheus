@@ -29,12 +29,13 @@ data class MetricMatcher(val matchers: List<Pair<String, LabelMatcher>>) {
     }
 
     fun test(lm: LabelMatcher, met: Metric, key: String): Boolean {
-        val m = met.m
         val emptyMatching = (lm.lmt == LabelMatchType.Neq || lm.lmt == LabelMatchType.NotMatch || lm.value == "")
         return if (!emptyMatching) {
-            m.containsKey(key) && lm.matches(m[key]!!)
+            val v = met.get(key)
+            v != null && lm.matches(v)
         } else {
-            !m.containsKey(key) || lm.matches(m[key]!!)
+            val v = met.get(key)
+            v == null || lm.matches(v)
         }
     }
 
