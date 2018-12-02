@@ -7,6 +7,6 @@ data class ScrapeTargetName(
         val confName: String,
         @AffinityKeyMapped val target: String)
 
-class ScrapeTarget(val url: String, val intervalSeconds: Float, val honorLabels: Boolean, val params: Map<String, List<String>>) {
+class ScrapeTarget(val jobName: String, val url: String, val intervalSeconds: Float, val honorLabels: Boolean, val params: Map<String, List<String>>) {
 
 }

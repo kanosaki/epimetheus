@@ -1,8 +1,15 @@
 package epimetheus.storage
 
 import epimetheus.model.*
+import epimetheus.pkg.textparse.ExporterParser
 import epimetheus.pkg.textparse.ScrapedSample
+import org.antlr.v4.runtime.CharStreams
 import org.apache.ignite.Ignite
+import org.apache.parquet.ParquetReadOptions
+import org.apache.parquet.example.data.simple.convert.GroupRecordConverter
+import org.apache.parquet.hadoop.ParquetFileReader
+import org.apache.parquet.io.ColumnIOFactory
+import org.apache.parquet.io.InputFile
 import kotlin.streams.toList
 
 
@@ -42,12 +49,40 @@ class IgniteGateway(private val ignite: Ignite) : Gateway, AutoCloseable {
     // metric_name{label1=~"pat"}
     override fun collectInstant(query: MetricMatcher, range: TimeFrames, offset: Long): GridMat {
         val mets = metricRegistry.lookupMetrics(query)
-        val vals = mets.parallelStream().map { eden.collectInstant(it, range, offset) }
-        return GridMat.concatSeries(vals.toList(), range)
+        val vals = mets.parallelStream().map { eden.collectInstant(it, range, offset) }.toList()
+        return GridMat.concatSeries(vals, range)
     }
 
     override fun close() {
         eden.close()
         metricRegistry.close()
+    }
+
+    fun importParquet(inputFile: InputFile) {
+        val pfr = ParquetFileReader(inputFile, ParquetReadOptions.builder().build())
+        val metadata = pfr.footer
+        val schema = metadata.fileMetaData.schema
+        val columns = schema.columns
+        val mets = columns.drop(1).map {
+            val metExpr = it.path.joinToString("")
+            ExporterParser.parseMetric(CharStreams.fromString(metExpr))
+        }
+        var page = pfr.readNextRowGroup()
+        while (page != null) {
+            val colIo = ColumnIOFactory().getColumnIO(schema)
+            val recordReader = colIo.getRecordReader(page, GroupRecordConverter(schema))
+            for (i in 0 until page.rowCount) {
+                val g = recordReader.read()
+                val ts = g.getLong(0, 0)
+                val samples = mutableListOf<ScrapedSample>()
+                for (c in 1 until columns.size) {
+                    val v = g.getDouble(c, 0)
+                    samples.add(ScrapedSample(mets[c - 1].m, v))
+                }
+                this.pushScraped("", ts, samples, false)
+            }
+            page = pfr.readNextRowGroup()
+        }
+        this.pushScraped("", 0, listOf(), true)
     }
 }

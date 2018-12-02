@@ -10,9 +10,11 @@ class APIVerticle(val handlerFactory: APIHandlerFactory, val config: APIServerCo
     override fun start() {
         val router = Router.router(vertx)
         router.route().handler { rc ->
+            val begin = System.currentTimeMillis()
             rc.addBodyEndHandler {
                 // TODO: use better logger
-                println("${rc.response().statusCode} ${rc.request().method()} ${rc.request().path()}")
+                val elapsed = System.currentTimeMillis() - begin
+                println("${rc.response().statusCode} ${rc.request().method()} ${rc.request().path()} ${elapsed}ms")
             }
             rc.next()
         }

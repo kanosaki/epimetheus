@@ -30,10 +30,11 @@ data class ScrapedSample(val m: SortedMap<String, String>, val value: Double) {
 object ExporterParser {
     val valueVisitor = ValueVisitor()
     val sampleVisitor = SampleVisitor()
+    val metricVisitor = MetricVisitor()
 
     class ExporterVisitor : PromExporterParserBaseVisitor<List<ScrapedSample>>() {
         override fun visitExporter(ctx: PromExporterParser.ExporterContext?): List<ScrapedSample> {
-            return ctx!!.metric().map { sampleVisitor.visit(it) }
+            return ctx!!.sample().map { sampleVisitor.visit(it) }
         }
     }
 
@@ -68,8 +69,8 @@ object ExporterParser {
         }
     }
 
-    class SampleVisitor : PromExporterParserBaseVisitor<ScrapedSample>() {
-        override fun visitMetric(ctx: PromExporterParser.MetricContext?): ScrapedSample {
+    class MetricVisitor: PromExporterParserBaseVisitor<Metric>() {
+        override fun visitMetric(ctx: PromExporterParser.MetricContext?): Metric {
             val name = ctx!!.metricName().text
             val labels = mutableMapOf<String, String>()
             if (ctx.labelBrace() != null) {
@@ -78,13 +79,40 @@ object ExporterParser {
                 }
             }
             labels[Metric.nameLabel] = name
+            return Metric(labels.toSortedMap())
+        }
+    }
+
+    class SampleVisitor : PromExporterParserBaseVisitor<ScrapedSample>() {
+        override fun visitSample(ctx: PromExporterParser.SampleContext?): ScrapedSample {
+            val met = metricVisitor.visit(ctx!!.metric())
             val v = ctx.value() ?: return ScrapedSample.Ignored
             val value = valueVisitor.visit(v)
             return if (value == null) {
                 ScrapedSample.Ignored
             } else {
-                ScrapedSample.create(name, value, *labels.toList().toTypedArray())
+                ScrapedSample(met.m, value)
             }
+        }
+    }
+
+    fun parseMetric(cs: CharStream, reportANTLRIssue: Boolean = PromQL.DEFAULT_ANTLR_REPORT): Metric {
+        val errs = PromQL.ANTLRErrorDetector(reportANTLRIssue)
+        val lexer = PromExporterLexer(cs)
+        lexer.removeErrorListeners()
+        lexer.addErrorListener(errs)
+
+        val tokenStream = CommonTokenStream(lexer)
+        val parser = PromExporterParser(tokenStream)
+        parser.removeErrorListeners()
+        parser.addErrorListener(errs)
+
+        val res = metricVisitor.visit(parser.metric())
+        if (errs.hasError()) {
+            // TODO: use specialized exception
+            throw RuntimeException(errs.errorMessage()!!)
+        } else {
+            return res
         }
     }
 

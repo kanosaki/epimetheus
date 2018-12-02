@@ -284,6 +284,14 @@ object PromQL {
 
     const val DEFAULT_ANTLR_REPORT = false
 
+    fun parseInstantSelector(input: CharStream, reportANTLRIssue: Boolean = DEFAULT_ANTLR_REPORT): InstantSelector {
+        val ast = parse(input, reportANTLRIssue)
+        return when(ast) {
+            is InstantSelector -> ast
+            else -> throw PromQLException("invalid selector")
+        }
+    }
+
     fun parseDuration(input: CharStream, reportANTLRIssue: Boolean = DEFAULT_ANTLR_REPORT): Duration {
         val errs = ANTLRErrorDetector(reportANTLRIssue)
 

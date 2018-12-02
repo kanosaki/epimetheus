@@ -129,5 +129,5 @@ DQ_STRINGCONTENT
 
 mode SQ_STRING_LITERAL;
 SQ_STRINGCONTENT
-   :  ~ ["\r\n]* '\''
+   :  ~ ['\r\n]* '\''
    -> popMode;

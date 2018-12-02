@@ -36,7 +36,7 @@ class BasicE2ETests {
                 ScrapedSample.create("baz", 7.0, "a" to "1"),
                 ScrapedSample.create("baz", 8.0, "b" to "1")
         ))
-        val handlerFactory = APIHandlerFactory(gateway)
+        val handlerFactory = APIHandlerFactory(vertx, gateway)
         vertx.deployVerticle(
                 APIVerticle(handlerFactory, APIServerConfiguration(port)),
                 context.succeeding {

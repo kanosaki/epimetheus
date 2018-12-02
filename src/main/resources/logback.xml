@@ -8,6 +8,7 @@
     </appender>
     <logger name="io.netty" level="WARN"/>
     <logger name="org.apache.ignite" level="WARN"/>
+    <logger name="org.apache.parquet" level="WARN"/>
 
     <root level="debug">
         <appender-ref ref="STDOUT"/>

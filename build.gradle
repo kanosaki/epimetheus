@@ -33,6 +33,7 @@ ext {
     vertxVersion = "3.5+"
     jacksonVersion = "2.9.+"
     junit5JupiterVersion = "5.+"
+    jmhVersion = '1.+'
 }
 
 repositories {
@@ -45,16 +46,21 @@ sourceSets {
 }
 
 jmh {
+    include = ['.*EvalAst.*']
     includeTests = true
     duplicateClassesStrategy = 'warn'
-    warmupIterations = 2
-    fork = 2
+    warmupIterations = 1
+    fork = 1
+    iterations = 1
     resultFormat = 'CSV'
-    benchmarkMode = ['thrpt', 'avgt', 'sample', 'ss']
+    benchmarkMode = ['thrpt']
+    failOnError = true
 }
 
 dependencies {
     antlr 'org.antlr:antlr4:4.7.+'
+    compile 'org.apache.parquet:parquet-avro:1.10.0'
+    compile 'org.apache.hadoop:hadoop-core:1.2.1'
     compile 'org.antlr:antlr4-runtime:4.7.+'
     compile "org.jetbrains.kotlin:kotlin-reflect:$kotlin_version"
     compile "org.jetbrains.kotlin:kotlin-stdlib-jdk8:$kotlin_version"
@@ -93,6 +99,7 @@ dependencies {
 compileKotlin {
     kotlinOptions.jvmTarget = "1.8"
 }
+
 compileTestKotlin {
     kotlinOptions.jvmTarget = "1.8"
 }

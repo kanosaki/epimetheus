@@ -17,10 +17,10 @@ fun startIgnite() {
 fun run(ignite: Ignite) {
     val b = Bootstrap(
             Config(listOf(
-                    ScrapeConfig("teor_in",
+                    ScrapeConfig("localhost",
                             Duration.ofSeconds(10),
                             null, null, null, null,
-                            listOf(StaticConfig(listOf("10.1.1.10:9100"), mapOf())))
+                            listOf(StaticConfig(listOf("localhost:9100"), mapOf())))
             ), Global(Duration.ofSeconds(15))), ignite)
     b.run()
 }

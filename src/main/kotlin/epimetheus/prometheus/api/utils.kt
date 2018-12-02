@@ -20,7 +20,7 @@ data class Response(
          * "success" or "error"
          */
         val status: String,
-        val data: Result?,
+        val data: Any?,
         val errorType: String?,
         val error: String?
 )
@@ -35,6 +35,7 @@ object Util {
     val commonFailureHandler: Handler<RoutingContext> = Handler { c ->
         val resp = c.response()
         val f = c.failure()
+        println(f.message)
         resp.statusCode = when (f) {
             is InvalidRequestException -> 400
             else -> 500

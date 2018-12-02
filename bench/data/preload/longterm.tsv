@@ -1,0 +1,7 @@
+{"count": 200000, "step": "15s"}
+# 347 days
+http_latency{code="200", method="GET"}	np.clip(np.random.normal(100, 20, ctr), 0, None)
+http_latency{code="200", method="PUT"}	np.random.gamma(100, 1, ctr)
+http_latency{code="200", method="POST"}	np.clip(np.random.normal(200, 40, ctr), 0, None)
+http_requests{code="200", method="GET"}	np.linspace(0, 10000, num=ctr) % 1000
+http_requests{code="500", method="GET"}	np.repeat(1, ctr)

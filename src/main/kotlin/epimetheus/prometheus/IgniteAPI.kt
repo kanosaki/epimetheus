@@ -24,7 +24,7 @@ class IgniteAPI : Service {
         val configCache = ignite.getOrCreateCache<String, APIServerConfiguration>("api-config")
         val config = configCache.get("default") ?: APIServerConfiguration(9090)
         gateway = IgniteGateway(ignite)
-        val handlerFactory = APIHandlerFactory(gateway)
+        val handlerFactory = APIHandlerFactory(vertx, gateway)
         apiVerticle = APIVerticle(handlerFactory, config)
     }
 

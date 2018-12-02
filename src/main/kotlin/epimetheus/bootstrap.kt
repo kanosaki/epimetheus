@@ -10,6 +10,8 @@ import epimetheus.prometheus.scrape.ScrapeDispatcher
 import epimetheus.prometheus.scrape.ScrapeTarget
 import epimetheus.prometheus.scrape.ScrapeTargetName
 import org.apache.ignite.Ignite
+import org.apache.ignite.cache.query.SqlFieldsQuery
+import org.apache.ignite.igfs.IgfsPath
 import org.apache.ignite.services.ServiceConfiguration
 import java.time.LocalDateTime
 
@@ -27,27 +29,12 @@ data class ScrapeSchedule(
 )
 
 class Bootstrap(val config: Config, val ignite: Ignite) {
-    //val vertxFut = initVertx(ignite)
-
-    //private fun initVertx(ignite: Ignite): Future<Vertx> {
-    //    val cm = IgniteClusterManager(ignite.configuration())
-    //    val options = VertxOptions().apply {
-    //        clusterManager = cm
-    //    }
-    //    val f = Future.future<Vertx>()
-    //    Vertx.clusteredVertx(options, f.completer())
-    //    return f
-    //}
-
     fun run() {
         this.updateConfig() // TODO: make this optional
         this.startApis()
         this.startScrapers()
         while (true) {
             Thread.sleep(2000)
-//            val now = Instant.now()
-//            val range = TimeRange(Timestamp.from(now.minusSeconds(30)), Timestamp.from(now))
-//            sg.collectInstant(Query("node_cpu", mapOf()), range)
         }
     }
 
@@ -59,7 +46,9 @@ class Bootstrap(val config: Config, val ignite: Ignite) {
                 s.targets.forEach { target ->
                     confCache.put(
                             ScrapeTargetName(filled.name, target),
-                            ScrapeTarget("${filled.scheme}://$target${filled.metricsPath}",
+                            ScrapeTarget(
+                                    sc.name,
+                                    "${filled.scheme}://$target${filled.metricsPath}",
                                     filled.scrapeInterval!!.nano.toFloat() * 1e-9f,
                                     filled.honorLabels!!,
                                     filled.params!!))

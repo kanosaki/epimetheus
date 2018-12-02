@@ -69,7 +69,8 @@ class EdenPageStore(val ignite: Ignite, val windowSize: Long = 5 * 60 * 1000) : 
                     doubleArrayOf(s.value),
                     longArrayOf(ts)
             )
-            streamer.addData(EdenPageKey(instance, metricID, windowKey(ts)), p)
+            val wk = windowKey(ts)
+            streamer.addData(EdenPageKey(instance, metricID, wk), p)
         }
         if (flush) {
             streamer.flush() // should be async, but put/get consistency might be required for testing

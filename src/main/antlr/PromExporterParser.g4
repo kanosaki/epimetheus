@@ -4,11 +4,15 @@ options {
 }
 
 exporter
-    : metric*
+    : sample*
+    ;
+
+sample
+    : metric value NL?
     ;
 
 metric
-    : metricName? labelBrace? value NL?
+    : metricName? labelBrace?
     ;
 
 labelBrace

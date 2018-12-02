@@ -54,8 +54,12 @@ class ScrapeDispatcher : Service {
         cancelled = true
     }
 
-    private fun writeSamples(target: ScrapeTargetName, results: List<ScrapedSample>) {
-        storage.pushScraped(target.target, System.currentTimeMillis(), results)
+    private fun writeSamples(target: ScrapeTargetName, jobName: String, results: List<ScrapedSample>) {
+        storage.pushScraped(target.target, System.currentTimeMillis(), results.map {
+            it.m["instance"] = target.target
+            it.m["job"] = jobName
+            ScrapedSample(it.m, it.value)
+        })
     }
 
     override fun execute(ctx: ServiceContext?) {
@@ -83,7 +87,7 @@ class ScrapeDispatcher : Service {
                             true -> {
                                 val samples = ar.result().samples
                                 println("SCRAPED ${cfg.url} ${samples.size} samples")
-                                writeSamples(head.key, samples)
+                                writeSamples(head.key, cfg.jobName, samples)
                                 ScrapeStatusSuccess(ar.result().latencyNs)
                             }
                             false -> {
