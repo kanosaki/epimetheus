@@ -1,5 +1,6 @@
 package epimetheus.storage
 
+import com.google.common.cache.CacheBuilder
 import epimetheus.CacheName.Prometheus.METRIC_META
 import epimetheus.model.*
 import epimetheus.pkg.textparse.ScrapedSample
@@ -9,6 +10,7 @@ import org.apache.ignite.cache.query.ScanQuery
 import org.apache.ignite.cache.query.TextQuery
 import org.apache.ignite.cache.query.annotations.QueryTextField
 import org.apache.ignite.configuration.CacheConfiguration
+import java.time.Duration
 
 
 typealias MetricKey = Signature
@@ -33,12 +35,21 @@ class IgniteMeta(val ignite: Ignite) : Meta, AutoCloseable {
         cacheMode = CacheMode.REPLICATED
         setIndexedTypes(MetricKey::class.java, MetricInfo::class.java)
     })
+    private val metCache = CacheBuilder
+            .newBuilder()
+            .concurrencyLevel(10)
+            .expireAfterAccess(Duration.ofMinutes(1))
+            .build<Signature, Boolean>()
 
     override fun registerMetricsFromSamples(samples: Collection<ScrapedSample>) {
         samples.forEach {
             val name = it.met.name() ?: ""
             val met = it.met
-            metricMeta.putIfAbsent(met.fingerprint(), MetricInfo(name, met))
+            val cached = metCache.getIfPresent(met.fingerprint())
+            if (cached == null) {
+                metCache.put(met.fingerprint(), true)
+                metricMeta.putIfAbsent(met.fingerprint(), MetricInfo(name, met))
+            }
         }
     }
 

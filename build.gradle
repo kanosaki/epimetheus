@@ -59,6 +59,7 @@ jmh {
 
 dependencies {
     antlr 'org.antlr:antlr4:4.7.+'
+    compile 'com.google.guava:guava:27.0.1-jre'
     compile 'org.apache.parquet:parquet-avro:1.10.0'
     compile 'org.apache.hadoop:hadoop-core:1.2.1'
     compile 'org.antlr:antlr4-runtime:4.7.+'
