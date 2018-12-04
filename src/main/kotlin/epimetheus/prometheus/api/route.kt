@@ -115,6 +115,11 @@ class APIHandlerFactory(val vertx: Vertx, val gateway: Gateway) {
                         }
                         ctx.response().end(Json.encode(Response("success", "done", null, null)))
                     }
+            route(HttpMethod.DELETE, "/scrape_data")
+                    .handler { ctx ->
+                        (gateway as IgniteGateway).clearData(null)
+                        ctx.response().end(Json.encode(Response("success", "done", null, null)))
+                    }
         }
     }
 }

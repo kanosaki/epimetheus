@@ -159,4 +159,8 @@ class EdenPageStore(val ignite: Ignite, val windowSize: Long = 5 * 60 * 1000) : 
         cache.close()
         streamer.close()
     }
+
+    fun clearData() {
+        cache.clear()
+    }
 }

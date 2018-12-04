@@ -58,6 +58,11 @@ class IgniteGateway(private val ignite: Ignite) : Gateway, AutoCloseable {
         metricRegistry.close()
     }
 
+    fun clearData(range: TimeFrames?) {
+        if (range != null) TODO()
+        eden.clearData()
+    }
+
     fun importParquet(inputFile: InputFile) {
         val pfr = ParquetFileReader(inputFile, ParquetReadOptions.builder().build())
         val metadata = pfr.footer
@@ -68,21 +73,33 @@ class IgniteGateway(private val ignite: Ignite) : Gateway, AutoCloseable {
             ExporterParser.parseMetric(CharStreams.fromString(metExpr))
         }
         var page = pfr.readNextRowGroup()
+        var ctr = 0
         while (page != null) {
             val colIo = ColumnIOFactory().getColumnIO(schema)
             val recordReader = colIo.getRecordReader(page, GroupRecordConverter(schema))
             for (i in 0 until page.rowCount) {
                 val g = recordReader.read()
                 val ts = g.getLong(0, 0)
-                val samples = mutableListOf<ScrapedSample>()
+                val instanceGroup = mutableMapOf<String, MutableList<ScrapedSample>>()
                 for (c in 1 until columns.size) {
                     val v = g.getDouble(c, 0)
-                    samples.add(ScrapedSample(mets[c - 1], v))
+                    val met = mets[c - 1]
+                    val instance = met.get(Metric.instanceLabel) ?: ""
+                    val group = instanceGroup[instance]
+                    if (group != null) {
+                        group.add(ScrapedSample(met, v))
+                    } else {
+                        instanceGroup[instance] = mutableListOf(ScrapedSample(met, v))
+                    }
+                    ctr++
                 }
-                this.pushScraped("", ts, samples, false)
+                instanceGroup.forEach { instance, samples ->
+                    this.pushScraped(instance, ts, samples, false)
+                }
             }
             page = pfr.readNextRowGroup()
         }
         this.pushScraped("", 0, listOf(), true)
+        println("Loaded $ctr samples")
     }
 }

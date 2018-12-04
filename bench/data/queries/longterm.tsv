@@ -1,1 +1,4 @@
-1y	12w	1d	node_cpu_total_seconds
+# time, duration, step, time_random_range, variation_count, query
+30d	30d	1h	30d	100	rate(http_requests{code="200", instance="a"}[20m])
+30d	30d	1h	30d	100	avg_over_time(http_latency{code="200", instance="a"}[20m])
+30d	30d	1h	30d	100	avg by (method) (http_latency{code="200", instance="a"})

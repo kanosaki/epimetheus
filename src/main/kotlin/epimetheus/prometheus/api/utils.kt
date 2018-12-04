@@ -35,6 +35,7 @@ object Util {
     val commonFailureHandler: Handler<RoutingContext> = Handler { c ->
         val resp = c.response()
         val f = c.failure()
+        f.printStackTrace()
         println(f.message)
         resp.statusCode = when (f) {
             is InvalidRequestException -> 400

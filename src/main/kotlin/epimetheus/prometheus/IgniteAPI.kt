@@ -4,6 +4,7 @@ import epimetheus.prometheus.api.APIHandlerFactory
 import epimetheus.prometheus.api.APIVerticle
 import epimetheus.storage.Gateway
 import epimetheus.storage.IgniteGateway
+import io.vertx.core.DeploymentOptions
 import io.vertx.core.Vertx
 import org.apache.ignite.Ignite
 import org.apache.ignite.resources.IgniteInstanceResource
@@ -17,15 +18,15 @@ class IgniteAPI : Service {
 
     lateinit var gateway: Gateway
     lateinit var vertx: Vertx
-    lateinit var apiVerticle: APIVerticle
+    lateinit var handlerFactory: APIHandlerFactory
+    lateinit var config: APIServerConfiguration
 
     override fun init(ctx: ServiceContext?) {
         vertx = Vertx.vertx()
         val configCache = ignite.getOrCreateCache<String, APIServerConfiguration>("api-config")
-        val config = configCache.get("default") ?: APIServerConfiguration(9090)
+        config = configCache.get("default") ?: APIServerConfiguration(9090)
         gateway = IgniteGateway(ignite)
-        val handlerFactory = APIHandlerFactory(vertx, gateway)
-        apiVerticle = APIVerticle(handlerFactory, config)
+        handlerFactory = APIHandlerFactory(vertx, gateway)
     }
 
     override fun cancel(ctx: ServiceContext?) {
@@ -33,6 +34,9 @@ class IgniteAPI : Service {
     }
 
     override fun execute(ctx: ServiceContext?) {
-        vertx.deployVerticle(apiVerticle)
+        vertx.deployVerticle({ APIVerticle(handlerFactory, config) }, DeploymentOptions().apply {
+            isWorker = true
+            instances = 10
+        })
     }
 }
