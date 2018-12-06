@@ -54,11 +54,13 @@ class ScrapeDispatcher : Service {
         cancelled = true
     }
 
-    private fun writeSamples(target: ScrapeTargetName, jobName: String, results: List<ScrapedSample>) {
+    private fun writeSamples(target: ScrapeTargetName, cfg: ScrapeTarget, results: List<ScrapedSample>) {
         storage.pushScraped(target.target, System.currentTimeMillis(), results.map {
             val mb = it.met.builder()
-            mb.put("instance", target.target)
-            mb.put("job", jobName)
+            if (!cfg.honorLabels) {
+                mb.put("instance", target.target)
+                mb.put("job", cfg.jobName)
+            }
             ScrapedSample(mb.build(), it.value)
         })
     }
@@ -88,7 +90,7 @@ class ScrapeDispatcher : Service {
                             true -> {
                                 val samples = ar.result().samples
                                 println("SCRAPED ${cfg.url} ${samples.size} samples")
-                                writeSamples(head.key, cfg.jobName, samples)
+                                writeSamples(head.key, cfg, samples)
                                 ScrapeStatusSuccess(ar.result().latencyNs)
                             }
                             false -> {

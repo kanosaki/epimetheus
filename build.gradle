@@ -46,7 +46,7 @@ sourceSets {
 }
 
 jmh {
-    include = ['.*EvalAst.*']
+    include = ['.*EvalAst.*', '.*ParseBench.*']
     includeTests = true
     duplicateClassesStrategy = 'warn'
     warmupIterations = 1

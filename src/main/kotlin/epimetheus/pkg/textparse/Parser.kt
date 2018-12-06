@@ -11,7 +11,7 @@ import org.antlr.v4.runtime.CommonTokenStream
 class InvalidSpecLine(msg: String) : RuntimeException(msg)
 
 
-data class ScrapedSample(val met: Metric, val value: Double) {
+data class ScrapedSample(val met: Metric, val value: Double, val timestamp: Long? = null) {
     companion object {
         val m = Metric.of("__ignored__")
         val Ignored = ScrapedSample(m, 0.0)
@@ -28,7 +28,7 @@ data class ScrapedSample(val met: Metric, val value: Double) {
 
     override fun toString(): String {
         val nonNameLabels = met.labels().filter { e -> e.first != Metric.nameLabel }
-        return "${met.get(Metric.nameLabel)}$nonNameLabels $value"
+        return "${met.get(Metric.nameLabel)}$nonNameLabels $value ${timestamp ?: ""}"
     }
 }
 
@@ -52,7 +52,7 @@ object ExporterParser {
             }
             val iNum = v.integer()
             if (iNum != null) {
-                return (sign * iNum.text.toInt()).toDouble()
+                return (sign * iNum.text.toDouble())
             }
             val fNum = v.floatNum() ?: throw PromQLException("invalid state")
             return if (fNum.NaN() != null) {
@@ -93,10 +93,15 @@ object ExporterParser {
             val met = metricVisitor.visit(ctx!!.metric())
             val v = ctx.value() ?: return ScrapedSample.Ignored
             val value = valueVisitor.visit(v)
+            val tsStr = ctx.timestamp()?.integer()?.NUMBER()?.text
             return if (value == null) {
                 ScrapedSample.Ignored
             } else {
-                ScrapedSample(met, value)
+                if (tsStr == null) {
+                    ScrapedSample(met, value)
+                } else {
+                    ScrapedSample(met, value, tsStr.toLong())
+                }
             }
         }
     }

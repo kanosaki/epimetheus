@@ -8,7 +8,11 @@ exporter
     ;
 
 sample
-    : metric value NL?
+    : metric value timestamp? NL?
+    ;
+
+timestamp
+    : integer
     ;
 
 metric

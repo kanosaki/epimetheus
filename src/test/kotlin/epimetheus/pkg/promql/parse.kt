@@ -137,7 +137,7 @@ class ParseTest {
                         )
         )
         data.forEachIndexed { index, pair ->
-            assertEquals(pair.second, PromQL.parse(CharStreams.fromString(pair.first)), "Error at $index : ${pair.first}")
+            assertEquals(pair.second, PromQL.parse(CharStreams.fromString(pair.first), true), "Error at $index : ${pair.first}")
         }
     }
 

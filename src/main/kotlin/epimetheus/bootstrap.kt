@@ -4,14 +4,12 @@ import epimetheus.CacheName.Prometheus.SCRAPE_TARGETS
 import epimetheus.ServiceName.Prometheus.API_SERVER
 import epimetheus.ServiceName.Prometheus.SCRAPE_DISPATCHER
 import epimetheus.pkg.textparse.ScrapedSample
-import epimetheus.prometheus.IgniteAPI
 import epimetheus.prometheus.Config
+import epimetheus.prometheus.IgniteAPI
 import epimetheus.prometheus.scrape.ScrapeDispatcher
 import epimetheus.prometheus.scrape.ScrapeTarget
 import epimetheus.prometheus.scrape.ScrapeTargetName
 import org.apache.ignite.Ignite
-import org.apache.ignite.cache.query.SqlFieldsQuery
-import org.apache.ignite.igfs.IgfsPath
 import org.apache.ignite.services.ServiceConfiguration
 import java.time.LocalDateTime
 

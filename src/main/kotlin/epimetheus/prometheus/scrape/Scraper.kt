@@ -1,7 +1,7 @@
 package epimetheus.prometheus.scrape
 
-import epimetheus.pkg.textparse.ExporterParser
 import epimetheus.ScrapeResult
+import epimetheus.pkg.textparse.ExporterParser
 import io.vertx.core.Future
 import io.vertx.core.Handler
 import io.vertx.ext.web.client.WebClient
@@ -12,6 +12,9 @@ class Scraper(private val client: WebClient, private val target: ScrapeTarget) :
         assert(event != null)
         val begin = System.nanoTime()
         val req = client.getAbs(target.url)
+        target.params.forEach { k, v ->
+            req.queryParams().add(k, v)
+        }
         req.send { ar ->
             val elapsed = System.nanoTime() - begin
             if (ar.failed()) {
