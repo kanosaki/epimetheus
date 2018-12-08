@@ -4,17 +4,12 @@ options {
 }
 
 // https://github.com/influxdata/platform/blob/master/query/promql/promql.peg
-
-expression
-    : condOrExpr;
-
-metricName
-    : ':'? ((NAME|Times) ':'?)*
-    ;
+expression: expr;
 
 identifier
     : NAME
     | Times // just 'x'
+    | DURATION_SUFFIX
     ; // TODO: correct?
 
 stringLiteral
@@ -52,10 +47,15 @@ duration
 label
     : NAME
     | Times // just 'x'
+    | DURATION_SUFFIX
     ;
 
 labelBlock
-    : '{' (labelMatch ','?)* '}'
+    : '{' labelMatchList? '}'
+    ;
+
+labelMatchList
+    : labelMatch (',' labelMatch)*
     ;
 
 labelMatch
@@ -70,12 +70,11 @@ labelOperators
     ;
 
 labelList
-    : '(' (label ','?)* ')'
+    : label (',' label)*
     ;
 
-selector
-    : identifier labelBlock? range? offset?
-    | labelBlock range? offset?
+labelListParen
+    : '(' labelList? ')'
     ;
 
 range
@@ -86,32 +85,34 @@ offset
     : Offset duration
     ;
 
-aggregateBy
-    : By labelList
-    ;
-
-aggregateWithout
-    : Without labelList
-    ;
-
 aggregateGroup
-    : aggregateBy
-    | aggregateWithout
+    : By labelListParen
+    | Without labelListParen
     ;
+
+exprList
+    : expr (',' expr)*
+    ;
+
 
 application
-    : identifier '(' (expression ','?)* ')' aggregateGroup?
-    | identifier aggregateGroup? '(' (expression ','?)* ')'
+    : identifier aggregateGroup '(' exprList? ')'
+    | identifier '(' exprList? ')' aggregateGroup?
+    ;
+
+selector
+    : identifier labelBlock? range? offset?
+    | labelBlock range? offset?
     ;
 
 labelMatchOp
-    : On labelList
-    | Ignoring labelList
+    : On labelListParen
+    | Ignoring labelListParen
     ;
 
 labelGroupOp
-    : GroupLeft labelList?
-    | GroupRight labelList?
+    : GroupLeft labelListParen?
+    | GroupRight labelListParen?
     ;
 
 boolOp
@@ -124,55 +125,74 @@ binOpModifiers
     | labelGroupOp
     ;
 
-condOrExpr
-	:	condAndExpr
-	|	condOrExpr Or binOpModifiers? condAndExpr
-	;
+//condOrExpr
+//	:	condAndExpr
+//	|	condOrExpr Or binOpModifiers? condAndExpr
+//	;
+//
+//condAndExpr
+//	:	eqExpr
+//	|	condAndExpr And binOpModifiers? eqExpr
+//	|	condAndExpr Unless binOpModifiers? eqExpr
+//	;
+//
+//eqExpr
+//	:	relationalExpr
+//	|	eqExpr '==' binOpModifiers? relationalExpr
+//	|	eqExpr '!=' binOpModifiers? relationalExpr
+//	;
+//
+//relationalExpr
+//	:	numericalExpr
+//	|	relationalExpr '<'  binOpModifiers? numericalExpr
+//	|	relationalExpr '>'  binOpModifiers? numericalExpr
+//	|	relationalExpr '<=' binOpModifiers? numericalExpr
+//	|	relationalExpr '>=' binOpModifiers? numericalExpr
+//	;
+//
+//numericalExpr
+//    : additiveExpr
+//    ;
+//
+//additiveExpr
+//	:	multiplicativeExpr
+//	|	additiveExpr '+' binOpModifiers? multiplicativeExpr
+//	|	additiveExpr '-' binOpModifiers? multiplicativeExpr
+//	;
+//
+//multiplicativeExpr
+//	:	powerExpr
+//	|	multiplicativeExpr '*' binOpModifiers? powerExpr
+//	|	multiplicativeExpr '/' binOpModifiers? powerExpr
+//	|	multiplicativeExpr '%' binOpModifiers? powerExpr
+//	;
+//
+//powerExpr
+//    : atom ('^' binOpModifiers? multiplicativeExpr)?
+//    ;
 
-condAndExpr
-	:	eqExpr
-	|	condAndExpr And binOpModifiers? eqExpr
-	|	condAndExpr Unless binOpModifiers? eqExpr
-	;
-
-eqExpr
-	:	relationalExpr
-	|	eqExpr '==' binOpModifiers? relationalExpr
-	|	eqExpr '!=' binOpModifiers? relationalExpr
-	;
-
-relationalExpr
-	:	numericalExpr
-	|	relationalExpr '<'  binOpModifiers? numericalExpr
-	|	relationalExpr '>'  binOpModifiers? numericalExpr
-	|	relationalExpr '<=' binOpModifiers? numericalExpr
-	|	relationalExpr '>=' binOpModifiers? numericalExpr
-	;
-
-numericalExpr
-    : additiveExpr
-    ;
-
-additiveExpr
-	:	multiplicativeExpr
-	|	additiveExpr '+' binOpModifiers? multiplicativeExpr
-	|	additiveExpr '-' binOpModifiers? multiplicativeExpr
-	;
-
-multiplicativeExpr
-	:	powerExpr
-	|	multiplicativeExpr '*' binOpModifiers? powerExpr
-	|	multiplicativeExpr '/' binOpModifiers? powerExpr
-	|	multiplicativeExpr '%' binOpModifiers? powerExpr
-	;
-
-powerExpr
-    : atom ('^' binOpModifiers? multiplicativeExpr)?
+expr
+    : '(' expr ')'
+    | <assoc=right> expr '^' binOpModifiers? expr
+    | expr '*' binOpModifiers? expr
+    | expr '/' binOpModifiers? expr
+    | expr '%' binOpModifiers? expr
+    | expr '+' binOpModifiers? expr
+    | expr '-' binOpModifiers? expr
+    | expr '<' binOpModifiers? expr
+    | expr '>' binOpModifiers? expr
+    | expr '<=' binOpModifiers? expr
+    | expr '>=' binOpModifiers? expr
+    | expr '==' binOpModifiers? expr
+    | expr '!=' binOpModifiers? expr
+    | expr And binOpModifiers? expr
+    | expr Unless binOpModifiers? expr
+    | expr Or binOpModifiers? expr
+    | atom
     ;
 
 atom
-    : '(' expression ')'
-    | application
+    : application
     | selector
     | literals
     ;

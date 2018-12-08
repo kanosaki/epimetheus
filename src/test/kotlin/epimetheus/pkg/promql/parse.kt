@@ -142,6 +142,23 @@ class ParseTest {
     }
 
     @Test
+    fun testSingle() {
+        val bind = Binding.default
+        val data = listOf(
+                "sum(foo + bar)" to
+                        AggregatorCall(
+                                bind.aggregators["sum"]!!,
+                                listOf(
+                                        bin("+", vec("foo"), vec("bar"))
+                                ), null),
+                "1" to num(1.0)
+        )
+        data.forEachIndexed { index, pair ->
+            assertEquals(pair.second, PromQL.parse(CharStreams.fromString(pair.first), true), "Error at $index : ${pair.first}")
+        }
+    }
+
+    @Test
     fun testParseDuration() {
         listOf(
                 "5h" to Duration.ofHours(5),

@@ -60,10 +60,10 @@ class IgniteMeta(val ignite: Ignite) : Meta, AutoCloseable {
     override fun lookupMetrics(query: MetricMatcher): List<Metric> {
         val name = query.namePattern()
         return if (name == null || name.lmt != LabelMatchType.Eq) {
-            val mets = metricMeta
-                    .query(ScanQuery<MetricKey, MetricInfo> { _, v -> query.matches(v.metric) }).toMutableList()
-            mets.sortBy { it.key }
-            mets.map { it.value.metric }
+             metricMeta
+                    .query(ScanQuery<MetricKey, MetricInfo> { _, v -> query.matches(v.metric) })
+                    .sortedBy { it.key }
+                    .map { it.value.metric }
         } else {
             val mets = metricMeta
                     .query(TextQuery<MetricKey, MetricInfo>(MetricInfo::class.java, name.value))

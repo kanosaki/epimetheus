@@ -1,6 +1,5 @@
 package epimetheus.pkg.promql
 
-import epimetheus.model.Metric
 import epimetheus.pkg.textparse.PromQLLexer
 import epimetheus.pkg.textparse.PromQLParser
 import epimetheus.pkg.textparse.PromQLParserBaseVisitor
@@ -66,12 +65,12 @@ object PromQL {
 
     class AggregatorGroupVisitor : PromQLParserBaseVisitor<AggregatorGroup>() {
         override fun visitAggregateGroup(ctx: PromQLParser.AggregateGroupContext?): AggregatorGroup {
-            val by = ctx!!.aggregateBy()
+            val by = ctx!!.By()
             return if (by != null) {
-                val labels = ctx.aggregateBy().labelList().label().map { it.text!! }
+                val labels = ctx.labelListParen()?.labelList()?.label()?.map { it.text!! } ?: listOf()
                 AggregatorGroup(AggregatorGroupType.By, labels)
             } else {
-                val labels = ctx.aggregateWithout().labelList().label().map { it.text!! }
+                val labels = ctx.labelListParen()?.labelList()?.label()?.map { it.text!! } ?: listOf()
                 AggregatorGroup(AggregatorGroupType.Without, labels)
             }
         }
@@ -105,7 +104,7 @@ object PromQL {
             if (ctx == null) {
                 return null
             }
-            val labels = ctx.labelList().label().map { it.text!! }
+            val labels = ctx.labelListParen().labelList()?.label()?.map { it.text!! } ?: listOf()
             return when (ctx.getChild(0).text.toLowerCase()) {
                 "on" -> LabelMatchOption(LabelMatchOptionType.On, labels)
                 "ignoring" -> LabelMatchOption(LabelMatchOptionType.Ignoring, labels)
@@ -119,7 +118,7 @@ object PromQL {
             if (ctx == null) {
                 return null
             }
-            val labels = ctx.labelList()?.label()?.map { it.text!! } ?: listOf()
+            val labels = ctx.labelListParen()?.labelList()?.label()?.map { it.text!! } ?: listOf()
             return when (ctx.getChild(0).text.toLowerCase()) {
                 "group_left" -> LabelGroupOption(LabelGroupOptionType.Left, labels)
                 "group_right" -> LabelGroupOption(LabelGroupOptionType.Right, labels)
@@ -129,15 +128,22 @@ object PromQL {
     }
 
     class ExpressionVisitor(val binding: Binding) : PromQLParserBaseVisitor<Expression>() {
-
-        private fun visitBinary(ctx: ParserRuleContext, mods: PromQLParser.BinOpModifiersContext?): Expression {
-            val boolMod = mods?.boolOp()
-            val match = mods?.labelMatchOp()
-            val group = mods?.labelGroupOp()
-            val ret = if (ctx.childCount == 1) {
-                this.visit(ctx.getChild(0))
+        override fun visitExpr(ctx: PromQLParser.ExprContext?): Expression {
+            val atom = ctx!!.atom()
+            val s = ctx.text
+            if (atom != null) {
+                return this.visit(atom)
+            }
+            if (ctx.expr(1) == null) { // parenthesis
+                return this.visit(ctx.expr(0))
             } else {
+                val lhs = ctx.expr(0)
+                val rhs = ctx.expr(1)
                 val opName = ctx.getChild(1).text.toLowerCase()
+                val mods = ctx.binOpModifiers()
+                val boolMod = mods?.boolOp()
+                val match = mods?.labelMatchOp()
+                val group = mods?.labelGroupOp()
                 val op = binding.binaryOps[opName] ?: throw PromQLException("Binary operator $opName is invalid")
                 val lmo = if (match == null) null else labelMatchOptsVisitor.visit(match)
                 val lgo = if (group == null) null else labelGroupOptsVisitor.visit(group)
@@ -153,56 +159,24 @@ object PromQL {
                         }
                     }
                 }
-                BinaryCall(op,
-                        this.visit(ctx.getChild(0)),
-                        this.visit(ctx.getChild(ctx.childCount - 1)),
+                val ret = BinaryCall(op,
+                        this.visit(lhs),
+                        this.visit(rhs),
                         VectorMatching(
                                 card,
                                 lmo?.labels ?: listOf(),
                                 matchOn,
                                 lgo?.labels ?: listOf()))
+                return if (boolMod != null) {
+                    BoolConvert(ret)
+                } else {
+                    ret
+                }
             }
-            return if (boolMod != null) {
-                BoolConvert(ret)
-            } else {
-                ret
-            }
-        }
-
-        override fun visitCondOrExpr(ctx: PromQLParser.CondOrExprContext?): Expression {
-            return visitBinary(ctx!!, ctx.binOpModifiers())
-        }
-
-        override fun visitCondAndExpr(ctx: PromQLParser.CondAndExprContext?): Expression {
-            return visitBinary(ctx!!, ctx.binOpModifiers())
-        }
-
-        override fun visitEqExpr(ctx: PromQLParser.EqExprContext?): Expression {
-            return visitBinary(ctx!!, ctx.binOpModifiers())
-        }
-
-        override fun visitRelationalExpr(ctx: PromQLParser.RelationalExprContext?): Expression {
-            return visitBinary(ctx!!, ctx.binOpModifiers())
-        }
-
-        override fun visitNumericalExpr(ctx: PromQLParser.NumericalExprContext?): Expression {
-            return visitAdditiveExpr(ctx!!.additiveExpr())
-        }
-
-        override fun visitAdditiveExpr(ctx: PromQLParser.AdditiveExprContext?): Expression {
-            return visitBinary(ctx!!, ctx.binOpModifiers())
-        }
-
-        override fun visitMultiplicativeExpr(ctx: PromQLParser.MultiplicativeExprContext?): Expression {
-            return visitBinary(ctx!!, ctx.binOpModifiers())
-        }
-
-        override fun visitPowerExpr(ctx: PromQLParser.PowerExprContext?): Expression {
-            return visitBinary(ctx!!, ctx.binOpModifiers())
         }
 
         override fun visitSelector(ctx: PromQLParser.SelectorContext?): Expression {
-            val matches = ctx!!.labelBlock()?.labelMatch()
+            val matches = ctx!!.labelBlock()?.labelMatchList()?.labelMatch()
                     ?.map {
                         val rhs = literalVisitor.visit(it.literals())
                         LabelMatch(
@@ -222,7 +196,7 @@ object PromQL {
         }
 
         override fun visitAtom(ctx: PromQLParser.AtomContext?): Expression {
-            val e = ctx!!.expression() ?: ctx.selector() ?: ctx.application()
+            val e = ctx!!.selector() ?: ctx.application()
             return if (e != null) {
                 visit(e)
             } else {
@@ -234,7 +208,7 @@ object PromQL {
             val fnName = ctx!!.identifier().text.toLowerCase()
             val fnkey = fnName.toLowerCase()
             val aggrGroup = ctx.aggregateGroup()
-            val exprs = ctx.expression().map { visitChildren(it)!! }
+            val exprs = ctx.exprList()?.expr()?.map { visit(it)!! } ?: listOf()
             if (aggrGroup != null) {
                 val aggr = binding.aggregators[fnkey] ?: throw PromQLException("Aggregator $fnName is undefined")
                 return AggregatorCall(aggr, exprs, aggregatorGroupVisitor.visit(aggrGroup))
@@ -286,7 +260,7 @@ object PromQL {
 
     fun parseInstantSelector(input: CharStream, reportANTLRIssue: Boolean = DEFAULT_ANTLR_REPORT): InstantSelector {
         val ast = parse(input, reportANTLRIssue)
-        return when(ast) {
+        return when (ast) {
             is InstantSelector -> ast
             else -> throw PromQLException("invalid selector")
         }

@@ -130,6 +130,7 @@ class PromSpec(val lines: List<String>, val storageFactory: () -> Gateway) : Exe
                 line = nextLine()
             }
         } catch (ex: Throwable) {
+            println(">>>>> ERROR at $line")
             println("""DEBUG
                 | Command stack:
                 |   ${cmds.map { "${it.lineStr} at ${it.lineNo} $it" }.joinToString("\n  ")}

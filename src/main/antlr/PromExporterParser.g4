@@ -20,7 +20,7 @@ metric
     ;
 
 labelBrace
-    : '{' (label ','?)* '}'
+    : '{' label? (',' label)* '}'
     ;
 
 stringLiteral
