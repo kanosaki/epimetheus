@@ -41,6 +41,14 @@ class IgniteMeta(val ignite: Ignite) : Meta, AutoCloseable {
             .expireAfterAccess(Duration.ofMinutes(1))
             .build<Signature, Boolean>()
 
+    private val matchCache = CacheBuilder
+            .newBuilder()
+            .concurrencyLevel(50)
+            .maximumWeight(10000) // make this configurable
+            .weigher<MetricMatcher, List<Metric>> { _, value -> value.size }
+            .expireAfterWrite(Duration.ofMinutes(5))
+            .build<MetricMatcher, List<Metric>>()
+
     override fun registerMetricsFromSamples(samples: Collection<ScrapedSample>) {
         samples.forEach {
             val name = it.met.name() ?: ""
@@ -58,12 +66,17 @@ class IgniteMeta(val ignite: Ignite) : Meta, AutoCloseable {
     }
 
     override fun lookupMetrics(query: MetricMatcher): List<Metric> {
+        val c = matchCache.getIfPresent(query)
+        if (c != null) {
+            return c
+        }
         val name = query.namePattern()
-        return if (name == null || name.lmt != LabelMatchType.Eq) {
-             metricMeta
+        val ret = if (name == null || name.lmt != LabelMatchType.Eq) {
+            val mets = metricMeta
                     .query(ScanQuery<MetricKey, MetricInfo> { _, v -> query.matches(v.metric) })
-                    .sortedBy { it.key }
-                    .map { it.value.metric }
+                    .toMutableList()
+            mets.sortBy { it.key }
+            mets.map { it.value.metric }
         } else {
             val mets = metricMeta
                     .query(TextQuery<MetricKey, MetricInfo>(MetricInfo::class.java, name.value))
@@ -72,7 +85,8 @@ class IgniteMeta(val ignite: Ignite) : Meta, AutoCloseable {
             mets.sortBy { it.key }
             mets.map { it.value.metric }
         }
-
+        matchCache.put(query, ret)
+        return ret
     }
 
     override fun close() {
