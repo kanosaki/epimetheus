@@ -102,8 +102,13 @@ class TestStorageIgnite {
     }
 
     @Test
-    fun testPutGetRange() {
-        GatewayTest.execTestRange(IgniteGateway(ignite))
+    fun testPutGetRangeNarrow() {
+        GatewayTest.execTestRangeNarrow(IgniteGateway(ignite))
+    }
+
+    @Test
+    fun testPutGetRangeWide() {
+        GatewayTest.execTestRangeWide(IgniteGateway(ignite))
     }
 
     @Test
@@ -112,15 +117,20 @@ class TestStorageIgnite {
     }
 }
 
-class TestGateway {
+class TestMockGateway {
     @Test
     fun testPutGetInstant() {
         GatewayTest.execTestInstant(MockGateway())
     }
 
     @Test
-    fun testPutGetRange() {
-        GatewayTest.execTestRange(MockGateway())
+    fun testPutGetRangeNarrow() {
+        GatewayTest.execTestRangeNarrow(MockGateway())
+    }
+
+    @Test
+    fun testPutGetRangeWide() {
+        GatewayTest.execTestRangeWide(MockGateway())
     }
 
     @Test
@@ -170,7 +180,7 @@ object GatewayTest {
     /**
      * Tests basic collectRange behavior. It will be collected that all values near by each grid points within specified time window.
      */
-    fun execTestRange(storage: Gateway) {
+    fun execTestRangeNarrow(storage: Gateway) {
         for (ts in 0..60 step 10) {
             storage.pushScraped("a:123", ts.toLong(), listOf(ScrapedSample.create("xx", ts.toDouble(), "instance" to "a:123")))
         }
@@ -219,6 +229,50 @@ object GatewayTest {
                 10L
         )
         assertRangeMatEquals(expectedOffset, actualOffset)
+    }
+
+    /**
+     * Tests collect range behavior where page border crosses.
+     */
+    fun execTestRangeWide(storage: Gateway) {
+        fun time(min: Int = 0, second: Int = 0): Long {
+            return min * 60 * 1000 + second * 1000L
+        }
+        for (ts in 0..time(10) step time(0, 10)) {
+            storage.pushScraped("a:123", ts, listOf(ScrapedSample.create("xx", ts.toDouble(), "instance" to "a:123")))
+        }
+
+        for (ts in 0..time(10) step time(0, 15)) {
+            storage.pushScraped("a:123", ts, listOf(ScrapedSample.create("xy", ts.toDouble(), "instance" to "a:123")))
+        }
+
+        fun met(name: String, instance: String): Metric {
+            return Metric.of(name, "instance" to instance)
+        }
+
+        val tf = TimeFrames(time(4, 45), time(5, 30), time(0, 15))
+        val windowSize = time(0, 30)
+        val actual = storage.collectRange(MetricMatcher.nameMatch("x.*", true), tf, windowSize)
+        val expected = RangeGridMat(listOf(met("xy", "a:123"), met("xx", "a:123")), tf, windowSize,
+                listOf(
+                        listOf(
+                                longArrayOf(time(4, 15), time(4, 30), time(4, 45)),
+
+                                longArrayOf(time(4, 30), time(4, 45), time(5, 0)),
+                                longArrayOf(time(4, 45), time(5, 0), time(5, 15)),
+                                longArrayOf(time(5, 0), time(5, 15), time(5, 30))
+
+                        ).map { it to it.map { v -> v.toDouble() }.toDoubleArray() },
+                        listOf(
+                                longArrayOf(time(4, 20), time(4, 30), time(4, 40)),
+                                longArrayOf(time(4, 30), time(4, 40), time(4, 50), time(5, 0)),
+
+                                longArrayOf(time(4, 50), time(5, 0), time(5,10)),
+                                longArrayOf(time(5, 0), time(5, 10), time(5, 20), time(5, 30))
+                        ).map { it to it.map { v -> v.toDouble() }.toDoubleArray() }
+                )
+        )
+        assertRangeMatEquals(expected, actual)
     }
 
     /**

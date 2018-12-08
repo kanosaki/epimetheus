@@ -6,7 +6,6 @@ import epimetheus.model.LabelMatcher
 import epimetheus.model.MetricMatcher
 import epimetheus.model.TimeFrames
 import epimetheus.pkg.promql.PromQL
-import epimetheus.prometheus.api.Util.commonFailureHandler
 import epimetheus.prometheus.api.Util.queryDuration
 import epimetheus.prometheus.api.Util.queryString
 import epimetheus.prometheus.api.Util.queryTimeParam
@@ -79,7 +78,6 @@ class APIHandlerFactory(val vertx: Vertx, val gateway: Gateway) {
                         val result = toResult(value)
                         r.end(Json.encode(Response("success", result, null, null)))
                     }
-                    .failureHandler(commonFailureHandler)
             route("/series")
                     .handler { ctx ->
                         val matches = ctx.queryParam("match[]")

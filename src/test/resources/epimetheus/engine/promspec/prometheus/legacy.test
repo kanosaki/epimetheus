@@ -8,6 +8,9 @@ load 5m
 	http_requests{job="app-server", instance="0", group="canary"}		0+70x10
 	http_requests{job="app-server", instance="1", group="canary"}		0+80x10
 
+eval instant at 50m rate(http_requests{group="canary", instance="1", job="app-server"}[50m])
+	{group="canary", instance="1", job="app-server"} 0.26666666666666666
+
 load 5m
 	x{y="testvalue"} 0+10x10
 
@@ -88,8 +91,6 @@ eval instant at 50m x{y="testvalue"}
 
 
 # Rates should calculate per-second rates.
-eval instant at 50m rate(http_requests{group="canary", instance="1", job="app-server"}[50m])
-	{group="canary", instance="1", job="app-server"} 0.26666666666666666
 
 
 # Counter resets at in the middle of range are handled correctly by rate().
