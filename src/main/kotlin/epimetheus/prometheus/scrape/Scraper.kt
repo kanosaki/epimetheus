@@ -1,6 +1,5 @@
 package epimetheus.prometheus.scrape
 
-import epimetheus.ScrapeResult
 import epimetheus.pkg.textparse.ExporterParser
 import io.vertx.core.Future
 import io.vertx.core.Handler

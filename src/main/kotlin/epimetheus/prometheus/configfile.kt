@@ -8,7 +8,11 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory
 import com.fasterxml.jackson.module.kotlin.KotlinModule
-import org.apache.ignite.cache.query.annotations.QuerySqlField
+import epimetheus.EpimetheusException
+import epimetheus.prometheus.scrape.ScrapeTarget
+import epimetheus.prometheus.scrape.ScrapeTargetKey
+import org.apache.http.client.utils.URIBuilder
+import org.apache.http.message.BasicNameValuePair
 import java.time.Duration
 
 object Parser {
@@ -44,7 +48,7 @@ class DurationDeserializer() : JsonDeserializer<Duration?>() {
     }
 }
 
-data class Config(
+data class ConfigFile(
         @JsonProperty("scrape_configs")
         val scrapeConfig: List<ScrapeConfig>,
         @JsonProperty("global")
@@ -55,7 +59,6 @@ data class Global(
         @JsonDeserialize(using = DurationDeserializer::class)
         @JsonProperty("scrape_interval") val scrapeInterval: Duration
 )
-
 
 data class ScrapeConfig(
         @JsonProperty("job_name", required = true)
@@ -74,26 +77,59 @@ data class ScrapeConfig(
         @JsonProperty("scheme")
         val scheme: String?,
 
-        @JsonProperty("args")
+        @JsonProperty("params")
         val params: Map<String, List<String>>?,
 
         @JsonProperty("static_configs")
         val staticConfigs: List<StaticConfig>?
 ) {
-    fun fullfill(global: Global): ScrapeConfig {
-        return ScrapeConfig(
-                name,
-                scrapeInterval ?: global.scrapeInterval,
-                metricsPath ?: "/metrics",
-                honorLabels ?: false,
-                scheme ?: "http",
-                params ?: mapOf(),
-                staticConfigs ?: listOf()
-        )
+    fun materialize(global: Global): List<Pair<ScrapeTargetKey, ScrapeTarget>> {
+        return staticConfigs?.flatMap { it.materialize(global, this) } ?: listOf()
+    }
+
+    fun scrapeIntervalSeconds(global: Global): Float {
+        return (this.scrapeInterval ?: global.scrapeInterval).seconds.toFloat()
+    }
+
+    fun baseUriBuilder(): URIBuilder {
+        val ub = URIBuilder()
+        ub.scheme = this.scheme ?: "http"
+        ub.path = this.metricsPath ?: "/metrics"
+        ub.setParameters(params?.entries?.flatMap { param ->
+            param.value.map { BasicNameValuePair(param.key, it) }
+        })
+        return ub
     }
 }
 
-data class StaticConfig(val targets: List<String>, val labels: Map<String, String>)
+abstract class ScrapeDiscovery {
+    abstract fun materialize(global: Global, sc: ScrapeConfig): List<Pair<ScrapeTargetKey, ScrapeTarget>>
+
+    protected fun splitHostPort(target: String): Pair<String, Int> {
+        val hostport = target.split(':', limit = 2)
+        if (hostport.isEmpty()) {
+            throw EpimetheusException("static_config target format error")
+        }
+        return hostport[0] to (hostport.getOrElse(1) { "80" }).toInt()
+    }
+}
+
+data class StaticConfig(@JsonProperty("targets") val targets: List<String>, @JsonProperty("labels") val labels: Map<String, String>?) : ScrapeDiscovery() {
+    override fun materialize(global: Global, sc: ScrapeConfig): List<Pair<ScrapeTargetKey, ScrapeTarget>> {
+        return targets.map { target ->
+            val hostport = splitHostPort(target)
+            val uri = sc.baseUriBuilder().apply {
+                host = hostport.first
+                port = hostport.second
+            }
+            val lo = if (sc.honorLabels == true) "" else {
+                val entries = labels?.entries?.map { it.key to it.value }.orEmpty() + listOf("instance" to target, "job" to sc.name)
+                entries.joinToString(",") { """${it.first}="${it.second}"""" }
+            }
+            ScrapeTargetKey(sc.name, target) to ScrapeTarget(uri.toString(), sc.scrapeIntervalSeconds(global), sc.honorLabels ?: false, sc.params ?: mapOf())
+        }
+    }
+}
 
 data class APIServerConfiguration(val port: Int)
 

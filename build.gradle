@@ -28,7 +28,7 @@ mainClassName = 'MainKt'
 sourceCompatibility = 1.8
 
 ext {
-    igniteVersion = "2.6+"
+    igniteVersion = "2.7+"
     vertxVersion = "3.5+"
     jacksonVersion = "2.9.+"
     junit5JupiterVersion = "5.+"

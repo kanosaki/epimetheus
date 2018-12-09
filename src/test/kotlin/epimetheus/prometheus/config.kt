@@ -4,7 +4,7 @@ import org.junit.jupiter.api.Test
 import java.time.Duration
 import kotlin.test.assertEquals
 
-class PrometheusConfigTest {
+class PrometheusConfigFileTest {
     @Test
     fun parseSimple() {
         val doc = """
@@ -16,7 +16,7 @@ class PrometheusConfigTest {
                 metrics_path: /metpath
                 honor_labels: true
                 scheme: https
-                args:
+                params:
                   x-foo: ["hoge"]
                 static_configs:
                   - targets:
@@ -25,8 +25,8 @@ class PrometheusConfigTest {
                       foo: bar
                       hoge: fuga
         """.trimIndent()
-        val c = Parser.mapper.readValue<Config>(doc, Config::class.java)
-        assertEquals(c, Config(
+        val c = Parser.mapper.readValue<ConfigFile>(doc, ConfigFile::class.java)
+        assertEquals(c, ConfigFile(
                 listOf(ScrapeConfig(
                         "default",
                         Duration.ofMinutes(1),

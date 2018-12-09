@@ -23,7 +23,7 @@ object CacheName {
 
 object ServiceName {
     object Prometheus {
-        const val SCRAPE_DISPATCHER = "scrapeDispatcher"
+        const val SCRAPE_SERVICE = "scrape"
         const val API_SERVER = "api"
     }
 }
