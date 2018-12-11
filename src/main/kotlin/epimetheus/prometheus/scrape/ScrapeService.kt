@@ -9,7 +9,9 @@ import io.vertx.core.Vertx
 import io.vertx.ext.web.client.WebClient
 import org.apache.ignite.Ignite
 import org.apache.ignite.IgniteCache
+import org.apache.ignite.Ignition
 import org.apache.ignite.cache.CacheInterceptorAdapter
+import org.apache.ignite.cache.CachePeekMode
 import org.apache.ignite.configuration.CacheConfiguration
 import org.apache.ignite.lang.IgniteRunnable
 import org.apache.ignite.resources.IgniteInstanceResource
@@ -18,7 +20,9 @@ import org.apache.ignite.services.ServiceContext
 import java.io.Closeable
 import java.time.LocalDateTime
 import java.time.temporal.ChronoUnit
-import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.Executor
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import javax.cache.Cache
 
@@ -51,6 +55,7 @@ class ScrapeService() : Service {
     lateinit var statuses: IgniteCache<ScrapeTargetKey, ScrapeSchedule>
     lateinit var targetConf: CacheConfiguration<ScrapeTargetKey, ScrapeTarget>
     lateinit var targets: IgniteCache<ScrapeTargetKey, ScrapeTarget>
+    lateinit var submitThread: ExecutorService
 
     class StatusCacheInterceptor() : CacheInterceptorAdapter<ScrapeTargetKey, ScrapeSchedule>() {
         // TODO: notify?
@@ -61,29 +66,36 @@ class ScrapeService() : Service {
         //}
     }
 
-    class TargetCacheInterceptor(val statuses: IgniteCache<ScrapeTargetKey, ScrapeSchedule>) : CacheInterceptorAdapter<ScrapeTargetKey, ScrapeTarget>() {
+    class TargetCacheInterceptor() : CacheInterceptorAdapter<ScrapeTargetKey, ScrapeTarget>() {
+        @Transient
+        private var statuses: IgniteCache<ScrapeTargetKey, ScrapeSchedule>? = null
+
+        private fun checkStatusCache() {
+            if (statuses == null) {
+                val ignite = Ignition.ignite()
+                statuses = ignite.cache(SCRAPE_STATUSES)
+            }
+        }
+
         override fun onAfterPut(entry: Cache.Entry<ScrapeTargetKey, ScrapeTarget>?) {
             // use async! to prevent striped executor blocked
-            statuses.putAsync(entry!!.key, ScrapeSchedule(LocalDateTime.now(), null, null))
+            checkStatusCache()
+            Ignition.ignite().executorService().submit {
+                statuses!!.put(entry!!.key, ScrapeSchedule(LocalDateTime.now(), null, null))
+            }
         }
 
         override fun onAfterRemove(entry: Cache.Entry<ScrapeTargetKey, ScrapeTarget>?) {
-            statuses.removeAsync(entry!!.key) // cascade delete, use async!
+            checkStatusCache()
+            Ignition.ignite().executorService().submit {
+                statuses!!.remove(entry!!.key) // cascade delete, use async!
+            }
         }
     }
 
-    private fun writeSamples(target: ScrapeTargetKey, cfg: ScrapeTarget, results: List<ScrapedSample>) {
-        storage.pushScraped(target.target, System.currentTimeMillis(), results.map {
-            val mb = it.met.builder()
-            if (!cfg.honorLabels) {
-                mb.put("instance", target.target)
-                mb.put("job", target.jobName)
-            }
-            ScrapedSample(mb.build(), it.value)
-        })
-    }
 
     override fun init(ctx: ServiceContext?) {
+        submitThread = Executors.newScheduledThreadPool(1)
         vertx = Vertx.vertx()
         client = WebClient.create(vertx)
         storage = IgniteGateway(ignite)
@@ -98,7 +110,7 @@ class ScrapeService() : Service {
         targetConf = CacheConfiguration<ScrapeTargetKey, ScrapeTarget>().apply {
             name = SCRAPE_TARGETS
             backups = 1
-            interceptor = TargetCacheInterceptor(statuses)
+            interceptor = TargetCacheInterceptor()
         }
         targets = ignite.getOrCreateCache<ScrapeTargetKey, ScrapeTarget>(targetConf)
     }
@@ -110,12 +122,24 @@ class ScrapeService() : Service {
     override fun execute(ctx: ServiceContext?) {
         while (!cancelled) {
             val now = LocalDateTime.now()
-            statuses.localEntries().map { kv ->
+            statuses.localEntries(CachePeekMode.PRIMARY).map { kv ->
                 schedule(now, kv.key, kv.value)
             }
             Thread.sleep(ScanRangeMilliseconds)
         }
     }
+
+    private fun writeSamples(target: ScrapeTargetKey, cfg: ScrapeTarget, results: List<ScrapedSample>) {
+        storage.pushScraped(target.target, System.currentTimeMillis(), results.map {
+            val mb = it.met.builder()
+            if (!cfg.honorLabels) {
+                mb.put("instance", target.target)
+                mb.put("job", target.jobName)
+            }
+            ScrapedSample(mb.build(), it.value)
+        })
+    }
+
 
     fun doScrape(key: ScrapeTargetKey) {
         val cfg = targets.get(key)
@@ -126,7 +150,10 @@ class ScrapeService() : Service {
                 true -> {
                     val samples = ar.result().samples
                     println("SCRAPED ${cfg.url} ${samples.size} samples")
-                    writeSamples(key, cfg, samples)
+                    // process background to avoid blocking vert.x event loop thread
+                    submitThread.submit {
+                        writeSamples(key, cfg, samples)
+                    }
                     ScrapeStatusSuccess(ar.result().latencyNs)
                 }
                 false -> {
