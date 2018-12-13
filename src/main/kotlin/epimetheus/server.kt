@@ -2,9 +2,9 @@ package epimetheus
 
 import epimetheus.ServiceName.Prometheus.API_SERVER
 import epimetheus.ServiceName.Prometheus.SCRAPE_SERVICE
-import epimetheus.prometheus.ConfigFile
 import epimetheus.prometheus.IgniteAPI
-import epimetheus.prometheus.Parser
+import epimetheus.prometheus.configfile.ConfigFile
+import epimetheus.prometheus.configfile.Parser
 import epimetheus.prometheus.scrape.ScrapeService
 import org.apache.ignite.Ignition
 import org.apache.ignite.configuration.IgniteConfiguration
@@ -27,14 +27,15 @@ class EpimetheusServer(igniteConfig: IgniteConfiguration) : AutoCloseable {
     }
 
     fun boot() {
-        ignite.services().deploy(
+        val apiNodes =ignite.cluster().forAttribute("api", "1")
+        ignite.services(apiNodes).deploy(
                 ServiceConfiguration().apply {
                     name = API_SERVER
                     service = IgniteAPI()
                     maxPerNodeCount = 1
                 }
         )
-        ignite.services().deploy(
+        ignite.services(ignite.cluster().forServers()).deploy(
                 ServiceConfiguration().apply {
                     name = SCRAPE_SERVICE
                     service = ScrapeService()

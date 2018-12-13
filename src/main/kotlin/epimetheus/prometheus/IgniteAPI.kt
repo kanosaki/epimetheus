@@ -1,7 +1,10 @@
 package epimetheus.prometheus
 
+import epimetheus.CacheName
+import epimetheus.ConfigKey
 import epimetheus.prometheus.api.APIHandlerFactory
 import epimetheus.prometheus.api.APIVerticle
+import epimetheus.prometheus.configfile.APIServerConfig
 import epimetheus.storage.Gateway
 import epimetheus.storage.IgniteGateway
 import io.vertx.core.DeploymentOptions
@@ -19,14 +22,16 @@ class IgniteAPI : Service {
     lateinit var gateway: Gateway
     lateinit var vertx: Vertx
     lateinit var handlerFactory: APIHandlerFactory
-    lateinit var config: APIServerConfiguration
+    lateinit var config: APIServerConfig
+
 
     override fun init(ctx: ServiceContext?) {
         vertx = Vertx.vertx()
-        val configCache = ignite.getOrCreateCache<String, APIServerConfiguration>("api-config")
-        config = configCache.get("default") ?: APIServerConfiguration(9090)
+        val configCache = ignite.cache<String, APIServerConfig>(CacheName.CONFIG)
+        config = configCache.get(ConfigKey.API_SERVER) ?: APIServerConfig(9090, 10)
         gateway = IgniteGateway(ignite)
         handlerFactory = APIHandlerFactory(vertx, gateway)
+        println("Listening API at :${config.port}")
     }
 
     override fun cancel(ctx: ServiceContext?) {
@@ -34,9 +39,12 @@ class IgniteAPI : Service {
     }
 
     override fun execute(ctx: ServiceContext?) {
-        vertx.deployVerticle({ APIVerticle(handlerFactory, config) }, DeploymentOptions().apply {
+        val self = this
+        vertx.deployVerticle({
+            APIVerticle(handlerFactory, config)
+        }, DeploymentOptions().apply {
             isWorker = true
-            instances = 10
+            instances = self.config.workers
         })
     }
 }

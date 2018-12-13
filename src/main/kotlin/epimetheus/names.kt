@@ -1,6 +1,8 @@
 package epimetheus
 
 object CacheName {
+    const val CONFIG = "config"
+
     object Prometheus {
         /**
          * Scrape target hosts and its configurations. (Infrequently updated, persistent)
@@ -19,6 +21,10 @@ object CacheName {
 
         const val METRIC_META = "metric_meta"
     }
+}
+
+object ConfigKey {
+    const val API_SERVER = "api-server"
 }
 
 object ServiceName {

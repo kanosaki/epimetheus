@@ -72,7 +72,7 @@ class APIHandlerFactory(val vertx: Vertx, val gateway: Gateway) {
                         val start = queryTimeParam(ctx, "start")
                         val end = queryTimeParam(ctx, "end")
                         val step = queryDuration(ctx, "step")
-                        val interp = Interpreter(gateway)
+                        val interp = Interpreter(gateway, 500)
                         val r = ctx.response()
                         val value = interp.eval(query, TimeFrames(start.toEpochMilli(), end.toEpochMilli(), step.toMillis()))
                         val result = toResult(value)

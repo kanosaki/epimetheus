@@ -1,11 +1,11 @@
 package epimetheus.prometheus.api
 
-import epimetheus.prometheus.APIServerConfiguration
+import epimetheus.prometheus.configfile.APIServerConfig
 import io.vertx.core.AbstractVerticle
 import io.vertx.core.http.HttpServer
 import io.vertx.ext.web.Router
 
-class APIVerticle(val handlerFactory: APIHandlerFactory, val config: APIServerConfiguration) : AbstractVerticle() {
+class APIVerticle(val handlerFactory: APIHandlerFactory, val config: APIServerConfig) : AbstractVerticle() {
     lateinit var server: HttpServer
     override fun start() {
         val router = Router.router(vertx)

@@ -19,6 +19,9 @@ data class Aggregator(
         override val variadic: Boolean = false,
         val evalFn: (params: List<Value>, args: List<Expression>, node: EvalNode, groups: AggregatorGroup?) -> GridMat
 ) : Applicative {
+    fun call(params: List<Value>, args: List<Expression>, node: EvalNode, groups: AggregatorGroup?): GridMat {
+        return evalFn(params, args, node, groups)
+    }
     companion object {
 
         private fun fingerprint(met: Metric, groups: AggregatorGroup?): Long {

@@ -1,7 +1,7 @@
 package epimetheus.e2e
 
 import epimetheus.pkg.textparse.ScrapedSample
-import epimetheus.prometheus.APIServerConfiguration
+import epimetheus.prometheus.configfile.APIServerConfig
 import epimetheus.prometheus.api.APIHandlerFactory
 import epimetheus.prometheus.api.APIVerticle
 import epimetheus.storage.MockGateway
@@ -19,6 +19,7 @@ import kotlin.test.assertEquals
 class BasicE2ETests {
     companion object {
         val port = 23456
+        val workers = 10
     }
 
     @BeforeEach
@@ -38,7 +39,7 @@ class BasicE2ETests {
         ))
         val handlerFactory = APIHandlerFactory(vertx, gateway)
         vertx.deployVerticle(
-                APIVerticle(handlerFactory, APIServerConfiguration(port)),
+                APIVerticle(handlerFactory, APIServerConfig(port, workers)),
                 context.succeeding {
                     context.completeNow()
                 })

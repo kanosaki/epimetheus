@@ -1,4 +1,4 @@
-package epimetheus.prometheus
+package epimetheus.prometheus.configfile
 
 import com.fasterxml.jackson.annotation.JsonProperty
 import com.fasterxml.jackson.core.JsonParser
@@ -13,6 +13,7 @@ import epimetheus.prometheus.scrape.ScrapeTarget
 import epimetheus.prometheus.scrape.ScrapeTargetKey
 import org.apache.http.client.utils.URIBuilder
 import org.apache.http.message.BasicNameValuePair
+import org.apache.ignite.cache.query.annotations.QuerySqlField
 import java.time.Duration
 
 object Parser {
@@ -131,5 +132,5 @@ data class StaticConfig(@JsonProperty("targets") val targets: List<String>, @Jso
     }
 }
 
-data class APIServerConfiguration(val port: Int)
+data class APIServerConfig(val port: Int, val workers: Int)
 
