@@ -34,8 +34,8 @@ class SimpleTest {
     @Test
     fun evalSinglePoint() {
         val mg = MockGateway()
-        mg.pushScraped("", 0, listOf(ScrapedSample.create("a", 1.0)))
-        mg.pushScraped("", 1, listOf(ScrapedSample.create("a", 2.0)))
+        mg.pushScraped(0, listOf(ScrapedSample.create("a", 1.0)))
+        mg.pushScraped(1, listOf(ScrapedSample.create("a", 2.0)))
         val interp = Interpreter(mg)
         val tf = TimeFrames.instant(0)
         val mat = interp.eval("a", tf)
@@ -63,19 +63,19 @@ class SimpleTest {
     @Test
     fun evalBinOpLiteralAndSelector() {
         val mg = MockGateway()
-        mg.pushScraped("", 0, listOf(
+        mg.pushScraped(0, listOf(
                 ScrapedSample.create("a", 1.0),
                 ScrapedSample.create("b", 3.0),
                 ScrapedSample.create("c", -3.0),
                 ScrapedSample.create("z", 0.0)
         ))
-        mg.pushScraped("", 1, listOf(
+        mg.pushScraped(1, listOf(
                 ScrapedSample.create("a", 2.0),
                 ScrapedSample.create("b", 4.0),
                 ScrapedSample.create("c", -3.0),
                 ScrapedSample.create("z", 0.0)
         ))
-        mg.pushScraped("", 2, listOf(
+        mg.pushScraped(2, listOf(
                 ScrapedSample.create("a", 3.0),
                 ScrapedSample.create("b", 5.0),
                 ScrapedSample.create("c", -3.0),

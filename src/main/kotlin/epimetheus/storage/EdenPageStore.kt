@@ -11,16 +11,12 @@ import it.unimi.dsi.fastutil.longs.LongArrayList
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet
 import org.apache.ignite.Ignite
 import org.apache.ignite.cache.affinity.AffinityKeyMapped
-import org.apache.ignite.cache.query.annotations.QuerySqlField
 import org.apache.ignite.configuration.CacheConfiguration
 import org.apache.ignite.stream.StreamTransformer
 import java.util.*
 
 
-data class EdenPageKey(
-        @AffinityKeyMapped @QuerySqlField(notNull = true) val instance: String,
-        @QuerySqlField(notNull = true) val metricID: Long,
-        @QuerySqlField(notNull = true) val timestamp: Long)
+data class EdenPageKey(@AffinityKeyMapped val metricID: Long, val timestamp: Long)
 
 data class EdenPage(val values: DoubleArray, val timestamps: LongArray) {
 }
@@ -63,7 +59,7 @@ class EdenPageStore(val ignite: Ignite, val windowSize: Long = 5 * 60 * 1000) : 
         })
     }
 
-    fun push(jobInstance: String, ts: Long, samples: Collection<ScrapedSample>, flush: Boolean = true) {
+    fun push(ts: Long, samples: Collection<ScrapedSample>, flush: Boolean = true) {
         samples.forEach { s ->
             val metricID = s.met.fingerprint()
             val p = EdenPage(
@@ -71,8 +67,7 @@ class EdenPageStore(val ignite: Ignite, val windowSize: Long = 5 * 60 * 1000) : 
                     longArrayOf(s.timestamp ?: ts)
             )
             val wk = windowKey(ts)
-            val instance = s.met.get(Metric.instanceLabel) ?: jobInstance
-            streamer.addData(EdenPageKey(instance, metricID, wk), p)
+            streamer.addData(EdenPageKey(metricID, wk), p)
         }
         if (flush) {
             streamer.flush() // should be async, but put/get consistency might be required for testing
@@ -157,7 +152,7 @@ class EdenPageStore(val ignite: Ignite, val windowSize: Long = 5 * 60 * 1000) : 
                 if (wkCache.contains(wk)) {
                     continue
                 }
-                collectingKeys.add(EdenPageKey(instance, metricID, wk))
+                collectingKeys.add(EdenPageKey(metricID, wk))
                 wkCache.add(wk)
                 if (wk > originalTs - offset) {
                     break
@@ -180,8 +175,8 @@ class EdenPageStore(val ignite: Ignite, val windowSize: Long = 5 * 60 * 1000) : 
         val metricID = metric.fingerprint()
         val collectingKeys = mutableSetOf<EdenPageKey>()
         for (t in range) {
-            collectingKeys.add(EdenPageKey(instance, metricID, windowKey(t)))
-            collectingKeys.add(EdenPageKey(instance, metricID, windowKey(t, -1)))
+            collectingKeys.add(EdenPageKey(metricID, windowKey(t)))
+            collectingKeys.add(EdenPageKey(metricID, windowKey(t, -1)))
         }
         val m = Long2DoubleRBTreeMap()
         cache.getEntries(collectingKeys).forEach {

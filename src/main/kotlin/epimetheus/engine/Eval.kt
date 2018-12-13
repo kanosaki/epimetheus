@@ -48,7 +48,7 @@ class DefaultEvalNode(override val top: Eval, val parent: EvalNode?) : EvalNode 
             }
             is AggregatorCall -> {
                 val vals = ast.params.map { evalExpr(it, depth + 1) }
-                ast.agg.evalFn(vals, ast.params, this, ast.groups)
+                ast.agg.call(vals, ast.params, this, ast.groups)
             }
             is FunctionCall -> {
                 val childNode = DefaultEvalNode(top, this)

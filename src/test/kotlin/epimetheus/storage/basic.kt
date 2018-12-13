@@ -146,7 +146,7 @@ object GatewayTest {
                 val samples = listOf("xx", "xy", "zz")
                         .map { ScrapedSample.create(it, ts.toDouble(), "instance" to instance) }
                 // record correct data
-                storage.pushScraped(instance, ts.toLong(), samples)
+                storage.pushScraped(ts.toLong(), samples)
             }
         }
 
@@ -182,11 +182,11 @@ object GatewayTest {
      */
     fun execTestRangeNarrow(storage: Gateway) {
         for (ts in 0..60 step 10) {
-            storage.pushScraped("a:123", ts.toLong(), listOf(ScrapedSample.create("xx", ts.toDouble(), "instance" to "a:123")))
+            storage.pushScraped(ts.toLong(), listOf(ScrapedSample.create("xx", ts.toDouble(), "instance" to "a:123")))
         }
 
         for (ts in 0..60 step 15) {
-            storage.pushScraped("a:123", ts.toLong(), listOf(ScrapedSample.create("xy", ts.toDouble(), "instance" to "a:123")))
+            storage.pushScraped(ts.toLong(), listOf(ScrapedSample.create("xy", ts.toDouble(), "instance" to "a:123")))
         }
 
         fun met(name: String, instance: String): Metric {
@@ -239,11 +239,11 @@ object GatewayTest {
             return min * 60 * 1000 + second * 1000L
         }
         for (ts in 0..time(10) step time(0, 10)) {
-            storage.pushScraped("a:123", ts, listOf(ScrapedSample.create("xx", ts.toDouble(), "instance" to "a:123")))
+            storage.pushScraped(ts, listOf(ScrapedSample.create("xx", ts.toDouble(), "instance" to "a:123")))
         }
 
         for (ts in 0..time(10) step time(0, 15)) {
-            storage.pushScraped("a:123", ts, listOf(ScrapedSample.create("xy", ts.toDouble(), "instance" to "a:123")))
+            storage.pushScraped(ts, listOf(ScrapedSample.create("xy", ts.toDouble(), "instance" to "a:123")))
         }
 
         fun met(name: String, instance: String): Metric {
@@ -267,7 +267,7 @@ object GatewayTest {
                                 longArrayOf(time(4, 20), time(4, 30), time(4, 40)),
                                 longArrayOf(time(4, 30), time(4, 40), time(4, 50), time(5, 0)),
 
-                                longArrayOf(time(4, 50), time(5, 0), time(5,10)),
+                                longArrayOf(time(4, 50), time(5, 0), time(5, 10)),
                                 longArrayOf(time(5, 0), time(5, 10), time(5, 20), time(5, 30))
                         ).map { it to it.map { v -> v.toDouble() }.toDoubleArray() }
                 )
@@ -279,8 +279,8 @@ object GatewayTest {
      * At Gateway.collectInstant, values near by each grid points within 5 minutes will adopted.
      */
     fun execTestInstantStale(storage: Gateway) {
-        storage.pushScraped("a:123", 0 * 60 * 1000, listOf(ScrapedSample.create("xx", 1.0, "instance" to "a:123")))
-        storage.pushScraped("a:123", 1 * 60 * 1000, listOf(ScrapedSample.create("xy", 1.0, "instance" to "a:123")))
+        storage.pushScraped(0 * 60 * 1000, listOf(ScrapedSample.create("xx", 1.0, "instance" to "a:123")))
+        storage.pushScraped(1 * 60 * 1000, listOf(ScrapedSample.create("xy", 1.0, "instance" to "a:123")))
 
         fun met(name: String, instance: String): Metric {
             return Metric.of(name, "instance" to instance)

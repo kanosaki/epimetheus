@@ -18,7 +18,7 @@ interface Gateway {
         val StaleSearchMilliseconds = 5 * 60 * 1000
     }
 
-    fun pushScraped(instance: String, ts: Long, mets: Collection<ScrapedSample>, flush: Boolean = true)
+    fun pushScraped(ts: Long, mets: Collection<ScrapedSample>, flush: Boolean = true)
 
     fun collectInstant(query: MetricMatcher, range: TimeFrames, offset: Long = 0): GridMat
     /**
@@ -35,14 +35,16 @@ class IgniteGateway(private val ignite: Ignite) : Gateway, AutoCloseable {
     val aged = Aged(ignite)
     override val metricRegistry = IgniteMeta(ignite)
 
-    override fun pushScraped(instance: String, ts: Long, mets: Collection<ScrapedSample>, flush: Boolean) {
+    override fun pushScraped(ts: Long, mets: Collection<ScrapedSample>, flush: Boolean) {
         metricRegistry.registerMetricsFromSamples(mets)
-        eden.push(instance, ts, mets, flush)
+        eden.push(ts, mets, flush)
     }
 
     override fun collectRange(query: MetricMatcher, frames: TimeFrames, range: Long, offset: Long): RangeGridMat {
         val mets = metricRegistry.lookupMetrics(query)
-        val vals = mets.parallelStream().map { eden.collectRange(it, frames, range, offset) }
+        val vals = mets.parallelStream().map {
+            eden.collectRange(it, frames, range, offset)
+        }
         return RangeGridMat(mets, frames, range, vals.toList(), offset)
     }
 
@@ -94,12 +96,12 @@ class IgniteGateway(private val ignite: Ignite) : Gateway, AutoCloseable {
                     ctr++
                 }
                 instanceGroup.forEach { instance, samples ->
-                    this.pushScraped(instance, ts, samples, false)
+                    this.pushScraped(ts, samples, false)
                 }
             }
             page = pfr.readNextRowGroup()
         }
-        this.pushScraped("", 0, listOf(), true)
+        this.pushScraped(0, listOf(), true)
         println("Loaded $ctr samples")
     }
 }

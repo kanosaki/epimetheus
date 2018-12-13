@@ -1,9 +1,9 @@
 package epimetheus.e2e
 
 import epimetheus.pkg.textparse.ScrapedSample
-import epimetheus.prometheus.configfile.APIServerConfig
 import epimetheus.prometheus.api.APIHandlerFactory
 import epimetheus.prometheus.api.APIVerticle
+import epimetheus.prometheus.configfile.APIServerConfig
 import epimetheus.storage.MockGateway
 import io.vertx.core.Vertx
 import io.vertx.ext.web.client.WebClient
@@ -25,13 +25,13 @@ class BasicE2ETests {
     @BeforeEach
     fun setUp(vertx: Vertx, context: VertxTestContext) {
         val gateway = MockGateway()
-        gateway.pushScraped("host1", 1000L, listOf(
+        gateway.pushScraped(1000L, listOf(
                 ScrapedSample.create("foo", 1.0, "a" to "1"),
                 ScrapedSample.create("foo", 2.0, "b" to "1"),
                 ScrapedSample.create("baz", 3.0, "a" to "1"),
                 ScrapedSample.create("baz", 4.0, "b" to "1")
         ))
-        gateway.pushScraped("host1", 2000L, listOf(
+        gateway.pushScraped(2000L, listOf(
                 ScrapedSample.create("foo", 5.0, "a" to "1"),
                 ScrapedSample.create("foo", 6.0, "b" to "1"),
                 ScrapedSample.create("baz", 7.0, "a" to "1"),

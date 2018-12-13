@@ -148,8 +148,7 @@ class PromSpec(val lines: List<String>, val storageFactory: () -> Gateway) : Exe
                 spec.expand(null).forEach {
                     // null -> blank value, skip and just increment timestamp
                     if (it != null) {
-                        val instance = spec.m[Metric.instanceLabel] ?: ""
-                        ctx.storage.pushScraped(instance, currentTs, listOf(ScrapedSample.create(spec.name, it, *spec.labels)))
+                        ctx.storage.pushScraped(currentTs, listOf(ScrapedSample.create(spec.name, it, *spec.labels)))
                     }
                     currentTs += gap.toMillis()
                 }

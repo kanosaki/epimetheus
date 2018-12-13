@@ -130,7 +130,7 @@ class ScrapeService() : Service {
     }
 
     private fun writeSamples(target: ScrapeTargetKey, cfg: ScrapeTarget, results: List<ScrapedSample>) {
-        storage.pushScraped(target.target, System.currentTimeMillis(), results.map {
+        storage.pushScraped(System.currentTimeMillis(), results.map {
             val mb = it.met.builder()
             if (!cfg.honorLabels) {
                 mb.put("instance", target.target)
