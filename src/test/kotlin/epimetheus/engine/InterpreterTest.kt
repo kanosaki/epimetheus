@@ -9,7 +9,7 @@ import epimetheus.pkg.textparse.ScrapedSample
 import epimetheus.storage.MockGateway
 import org.junit.jupiter.api.Test
 
-class SimpleTest {
+class InterpreterTest {
     @Test
     fun evalLiteral() {
         val interp = Interpreter(MockGateway())

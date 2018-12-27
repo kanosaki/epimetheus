@@ -1,5 +1,7 @@
 package epimetheus.model
 
+import epimetheus.engine.plan.RuntimeValue
+import epimetheus.engine.plan.TestUtils
 import kotlin.test.assertEquals
 import kotlin.test.fail
 
@@ -7,7 +9,9 @@ object TestUtils {
     const val DOUBLE_COMPARE_DELTA = 1e-6
 
     fun assertValueEquals(m1: Value, m2: Value, allowNonDetComparsion: Boolean = false, prune: Boolean = false, msg: String = "") {
-        if (m1 is GridMat && m2 is GridMat) {
+        if (m1 is RuntimeValue && m2 is RuntimeValue) {
+            TestUtils.assertRuntimeValueEquals(m1, m2, allowNonDetComparsion, prune, msg)
+        } else if (m1 is GridMat && m2 is GridMat) {
             return if (prune) {
                 assertMatEquals(m1.prune(), m2.prune(), allowNonDetComparsion, msg)
             } else {
@@ -24,7 +28,8 @@ object TestUtils {
         }
     }
 
-    private fun compareDouble(x1: Double, x2: Double, allowNonDetComparsion: Boolean = false): Boolean {
+
+    fun compareDouble(x1: Double, x2: Double, allowNonDetComparsion: Boolean = false): Boolean {
         if (x1.isFinite() && x2.isFinite()) {
             if (Math.abs(x1 - x2) < DOUBLE_COMPARE_DELTA) {
                 return true

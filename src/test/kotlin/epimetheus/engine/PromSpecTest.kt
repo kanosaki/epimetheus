@@ -18,12 +18,13 @@ class PromSpecTest {
 
     @Test
     fun testLoadCmd() {
+        val ctx = SpecContext(InterpreterEngine()) { MockGateway() }
         val ps = PromSpec(listOf(
                 "load 5m",
                 "foo{bar=\"foo\"} 0+1x5 10+2x10 1x10",
                 "{} _ x5 stale x10",
                 "x{y=\"testvalue\"} 0+10x10"
-        )) { MockGateway() }
+        ), ctx)
         assertEquals(listOf(
                 PromSpec.LoadCmd(Duration.ofMinutes(5), listOf(
                         SpecSeriesDesc("foo", arrayOf("bar" to "foo"), listOf(
@@ -58,8 +59,9 @@ class PromSpecTest {
                 "eval_ordered instant 1" to PromSpec.EvalCmd(NumberLiteral(1.0), null, true, false, listOf()),
                 "eval_fail instant 1" to PromSpec.EvalCmd(NumberLiteral(1.0), null, false, true, listOf())
         )
+        val ctx = SpecContext(InterpreterEngine()) { MockGateway() }
         cases.forEach {
-            assertEquals(listOf(it.second), PromSpec(listOf(it.first)) { MockGateway() }.commands, "error at '${it.first}'")
+            assertEquals(listOf(it.second), PromSpec(listOf(it.first), ctx).commands, "error at '${it.first}'")
         }
     }
 }

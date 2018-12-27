@@ -1,5 +1,8 @@
 package epimetheus.storage
 
+import epimetheus.engine.plan.RPointMatrix
+import epimetheus.engine.plan.RRangeMatrix
+import epimetheus.engine.plan.RRanges
 import epimetheus.model.*
 import epimetheus.pkg.textparse.ExporterParser
 import epimetheus.pkg.textparse.ScrapedSample
@@ -20,6 +23,9 @@ interface Gateway {
 
     fun pushScraped(ts: Long, mets: Collection<ScrapedSample>, flush: Boolean = true)
 
+    fun fetchInstant(metrics: List<Metric>, frames: TimeFrames, offset: Long = 0): RPointMatrix
+    fun fetchRange(metrics: List<Metric>, frames: TimeFrames, range: Long, offset: Long = 0): RRangeMatrix
+
     fun collectInstant(query: MetricMatcher, range: TimeFrames, offset: Long = 0): GridMat
     /**
      * @param frames Collect upper points
@@ -38,6 +44,18 @@ class IgniteGateway(private val ignite: Ignite) : Gateway, AutoCloseable {
     override fun pushScraped(ts: Long, mets: Collection<ScrapedSample>, flush: Boolean) {
         metricRegistry.registerMetricsFromSamples(mets)
         eden.push(ts, mets, flush)
+    }
+
+    override fun fetchInstant(metrics: List<Metric>, frames: TimeFrames, offset: Long): RPointMatrix {
+        val vals = metrics.parallelStream().map { eden.fetchInstant(it, frames, offset) }.toList()
+        return RPointMatrix(metrics, vals)
+    }
+
+    override fun fetchRange(metrics: List<Metric>, frames: TimeFrames, range: Long, offset: Long): RRangeMatrix {
+        val vals = metrics.parallelStream().map { met ->
+            RRanges(eden.fetchRange(met, frames, range, offset))
+        }
+        return RRangeMatrix(metrics, vals.toList(), range, offset)
     }
 
     override fun collectRange(query: MetricMatcher, frames: TimeFrames, range: Long, offset: Long): RangeGridMat {

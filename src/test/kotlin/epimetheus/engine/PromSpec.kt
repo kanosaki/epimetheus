@@ -15,13 +15,51 @@ import org.antlr.v4.runtime.CharStreams
 import org.apache.commons.io.IOUtils
 import org.apache.ignite.Ignition
 import org.apache.ignite.configuration.IgniteConfiguration
-import org.junit.jupiter.api.*
+import org.junit.jupiter.api.DynamicTest
+import org.junit.jupiter.api.Tag
+import org.junit.jupiter.api.TestFactory
+import org.junit.jupiter.api.fail
 import org.junit.jupiter.api.function.Executable
 import java.io.File
 import java.time.Duration
 
 
-class SpecContext(var storage: Gateway, var interpreter: Interpreter) {
+// Interpreter / Evaluator
+interface TargetEngine {
+    fun init(gateway: Gateway)
+    fun evalAst(ast: Expression, tf: TimeFrames, tracer: Tracer): Value
+}
+
+class InterpreterEngine() : TargetEngine {
+    lateinit var interpreter: Interpreter
+    override fun init(gateway: Gateway) {
+        interpreter = Interpreter(gateway)
+    }
+
+    override fun evalAst(ast: Expression, tf: TimeFrames, tracer: Tracer): Value {
+        return interpreter.evalAst(ast, tf, tracer)
+    }
+}
+
+class EvaluatorEngine() : TargetEngine {
+    lateinit var evaluator: Engine
+    override fun init(gateway: Gateway) {
+        var evaluator = Engine(gateway)
+    }
+
+    override fun evalAst(ast: Expression, tf: TimeFrames, tracer: Tracer): Value {
+        return evaluator.evalAst(ast, tf, tracer)
+    }
+}
+
+
+class SpecContext(var interpreter: TargetEngine, val storageFactory: () -> Gateway) {
+    var storage: Gateway = storageFactory()
+    fun init() {
+        storage = storageFactory()
+        interpreter.init(storage)
+    }
+
 }
 
 abstract class SpecCmd {
@@ -33,7 +71,7 @@ abstract class SpecCmd {
 /**
  * Runs Prometheus test cases(*.test files)
  */
-class PromSpec(val lines: List<String>, val storageFactory: () -> Gateway) : Executable {
+class PromSpec(val lines: List<String>, val context: SpecContext) : Executable {
     companion object {
         private val patEvalInstant = Regex("""\s*instant\s+(?:at\s+(\S+)\s*)?(.+)${'$'}""")
     }
@@ -208,21 +246,17 @@ class PromSpec(val lines: List<String>, val storageFactory: () -> Gateway) : Exe
     }
 
     override fun execute() {
-        var storage = storageFactory()
-        var interpreter = Interpreter(storage)
-        var ctx = SpecContext(storage, interpreter)
+        context.init()
         commands.forEach {
             try {
                 when (it) {
                     is ClearCmd -> {
-                        storage = storageFactory()
-                        interpreter = Interpreter(storage)
-                        ctx = SpecContext(storage, interpreter)
+                        context.init()
                     }
                     is EvalCmd -> {
                         if (it.fail) {
                             try {
-                                it.eval(ctx)
+                                it.eval(context)
                                 throw RuntimeException("not failed(should throw PromQLException) at eval_fail")
                             } catch (_: PromQLException) {
                             } catch (e: java.lang.AssertionError) {
@@ -230,10 +264,10 @@ class PromSpec(val lines: List<String>, val storageFactory: () -> Gateway) : Exe
                                 throw RuntimeException("not failed(but AssertionError) at eval_fail")
                             }
                         } else {
-                            it.eval(ctx)
+                            it.eval(context)
                         }
                     }
-                    else -> it.eval(ctx)
+                    else -> it.eval(context)
                 }
             } catch (ex: Throwable) {
                 fail("EXCEPTION during evaluating ${it.lineStr} (line: ${it.lineNo}) $it", ex)
@@ -254,7 +288,8 @@ object PromSpecTests {
             it.inputStream().use { input ->
                 val lines = IOUtils.readLines(input, Charsets.UTF_8)
                         .map { it.trim() }
-                DynamicTest.dynamicTest(it.name, PromSpec(lines) { MockGateway() })
+                val ctx = SpecContext(InterpreterEngine()) { MockGateway() }
+                DynamicTest.dynamicTest(it.name, PromSpec(lines, ctx))
             }
         }
     }
@@ -273,12 +308,13 @@ object PromSpecTests {
             it.inputStream().use { input ->
                 val lines = IOUtils.readLines(input, Charsets.UTF_8)
                         .map { it.trim() }
-                DynamicTest.dynamicTest(it.name, PromSpec(lines) {
+                val ctx = SpecContext(InterpreterEngine()) {
                     val ign = Ignition.getOrStart(conf)
                     ign.destroyCache(CacheName.Prometheus.METRIC_META)
                     ign.destroyCache(CacheName.Prometheus.FRESH_SAMPLES)
                     IgniteGateway(ign)
-                })
+                }
+                DynamicTest.dynamicTest(it.name, PromSpec(lines, ctx))
             }
         }
     }

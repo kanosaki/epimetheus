@@ -1,103 +1,55 @@
-package epimetheus.pkg.promql
+package epimetheus.engine.plan
 
-import epimetheus.engine.EvalNode
-import epimetheus.model.*
+import epimetheus.model.DoubleSlice
+import epimetheus.model.LongSlice
+import epimetheus.model.Mat
+import epimetheus.model.Metric
+import epimetheus.pkg.promql.AggregatorGroup
+import epimetheus.pkg.promql.AggregatorGroupType
+import epimetheus.pkg.promql.PromQLException
+import epimetheus.pkg.promql.Utils
 import it.unimi.dsi.fastutil.doubles.Double2IntArrayMap
-import it.unimi.dsi.fastutil.doubles.Double2IntRBTreeMap
 import it.unimi.dsi.fastutil.doubles.DoubleArrayList
 import it.unimi.dsi.fastutil.ints.AbstractIntSet
 import it.unimi.dsi.fastutil.ints.IntArraySet
 import it.unimi.dsi.fastutil.ints.IntOpenHashSet
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap
 import it.unimi.dsi.fastutil.longs.Long2ObjectRBTreeMap
-import java.util.*
 
-data class Aggregator(
-        val name: String,
-        override val argTypes: List<ValueType> = listOf(ValueType.Matrix),
-        override val returnType: ValueType = ValueType.Vector,
-        override val variadic: Boolean = false,
-        val evalFn: (params: List<Value>, args: List<Expression>, node: EvalNode, groups: AggregatorGroup?) -> GridMat
-) : Applicative {
-    fun call(params: List<Value>, args: List<Expression>, node: EvalNode, groups: AggregatorGroup?): GridMat {
-        return evalFn(params, args, node, groups)
-    }
+interface Aggregator {
+    val name: String
+
     companion object {
-
-        private fun fingerprint(met: Metric, groups: AggregatorGroup?): Long {
-            if (groups == null) {
-                return met.fingerprint()
-            }
-            return when (groups.typ) {
-                AggregatorGroupType.By -> met.filteredFingerprint(true, groups.labels)
-                AggregatorGroupType.Without -> met.filteredFingerprint(false, groups.labels, true)
-            }
-        }
-
-        private fun simpleColMapping(fn: (List<DoubleArray>) -> DoubleArray): (params: List<Value>, args: List<Expression>, node: EvalNode, groups: AggregatorGroup?) -> GridMat {
-            return { param, args, node, group ->
-                val m = param[0] as GridMat
-                when {
-                    m.metrics.isEmpty() -> GridMat(arrayOf(), node.frames, listOf())
-                    group != null -> {
-                        // TODO: tell MetricRegistry about new metrics
-                        val filteredMets = Long2ObjectRBTreeMap<Metric>()
-                        val filteredMetMapping = Long2ObjectOpenHashMap<IntArraySet>(m.metrics.size)
-                        m.metrics.forEachIndexed { index, met ->
-                            val filteredMetric = when (group.typ) {
-                                AggregatorGroupType.By -> met.filterOn(group.labels)
-                                AggregatorGroupType.Without -> met.filterWithout(true, group.labels)
-                            }
-                            val fp = filteredMetric.fingerprint()
-                            filteredMets[fp] = filteredMetric
-                            if (filteredMetMapping.containsKey(fp)) {
-                                filteredMetMapping[fp].add(index)
-                            } else {
-                                filteredMetMapping[fp] = IntArraySet(listOf(index))
-                            }
-                        }
-                        GridMat(filteredMets.values.toTypedArray(), m.timestamps, filteredMets.keys.map { metKey ->
-                            val values = filteredMetMapping[metKey].map { m.values[it!!] }
-                            fn(values)
-                        })
-                    }
-                    else -> GridMat(arrayOf(Metric.empty), m.timestamps, listOf(fn(m.values)))
-                }
-            }
-        }
-
-        val builtins = listOf(
-                Aggregator("sum", evalFn = simpleColMapping { values ->
-                    val sz = values[0].size
-                    DoubleArray(sz) {
+        val mappingAggregators = listOf(
+                MappingAggregator("sum") { values ->
+                    DoubleSlice.init(values[0].size) {
                         var sum = 0.0
                         for (i in 0 until values.size) {
                             sum += values[i][it]
                         }
                         sum
                     }
-                }),
-                Aggregator("avg", evalFn = simpleColMapping { values ->
-                    DoubleArray(values[0].size) {
+                },
+                MappingAggregator("avg") { values ->
+                    DoubleSlice.init(values[0].size) {
                         var sum = 0.0
                         for (i in 0 until values.size) {
                             sum += values[i][it]
                         }
                         sum / values.size
                     }
-                }),
-                Aggregator("count", evalFn = simpleColMapping { values ->
-                    val sz = values[0].size
-                    DoubleArray(sz) {
+                },
+                MappingAggregator("count") { values ->
+                    DoubleSlice.init(values[0].size) {
                         var ctr = 0
                         for (i in 0 until values.size) {
                             ctr++
                         }
                         ctr.toDouble()
                     }
-                }),
-                Aggregator("min", evalFn = simpleColMapping { values ->
-                    DoubleArray(values[0].size) {
+                },
+                MappingAggregator("min") { values ->
+                    DoubleSlice.init(values[0].size) {
                         var min = values[0][0]
                         for (i in 0 until values.size) {
                             val v = values[i][it]
@@ -107,9 +59,9 @@ data class Aggregator(
                         }
                         min
                     }
-                }),
-                Aggregator("max", evalFn = simpleColMapping { values ->
-                    DoubleArray(values[0].size) {
+                },
+                MappingAggregator("max") { values ->
+                    DoubleSlice.init(values[0].size) {
                         var max = values[0][0]
                         for (i in 0 until values.size) {
                             val v = values[i][it]
@@ -119,9 +71,9 @@ data class Aggregator(
                         }
                         max
                     }
-                }),
-                Aggregator("stddev", evalFn = simpleColMapping { values ->
-                    DoubleArray(values[0].size) {
+                },
+                MappingAggregator("stdev") { values ->
+                    DoubleSlice.init(values[0].size) {
                         var aux = 0.0
                         var count = 0.0
                         var mean = 0.0
@@ -133,9 +85,9 @@ data class Aggregator(
                         }
                         Math.sqrt(aux / count)
                     }
-                }),
-                Aggregator("stdvar", evalFn = simpleColMapping { values ->
-                    DoubleArray(values[0].size) {
+                },
+                MappingAggregator("stdvar") { values ->
+                    DoubleSlice.init(values[0].size) {
                         var aux = 0.0
                         var count = 0.0
                         var mean = 0.0
@@ -147,16 +99,29 @@ data class Aggregator(
                         }
                         aux / count
                     }
-                }),
-                Aggregator("topk") { vals, a, n, g ->
-                    val kDbl = vals[0] as Scalar
+                }
+        )
+
+        private fun fingerprint(met: Metric, groups: AggregatorGroup?): Long {
+            if (groups == null) {
+                return met.fingerprint()
+            }
+            return when (groups.typ) {
+                AggregatorGroupType.By -> met.filteredFingerprint(true, groups.labels)
+                AggregatorGroupType.Without -> met.filteredFingerprint(false, groups.labels, true)
+            }
+        }
+
+        val variadicAggregator = listOf(
+                VariadicAggregator("topk") { ec, args, group ->
+                    val kDbl = args[0] as RScalar
                     val k = kDbl.value.toInt()
-                    val m = vals[1] as GridMat
-                    val tops = Double2IntArrayMap(Math.min(k, m.values.size))
+                    val m = args[1] as RPointMatrix
+                    val tops = Double2IntArrayMap(Math.min(k, m.rowCount))
                     val buckets = Long2ObjectOpenHashMap<AbstractIntSet>(m.metrics.size)
-                    val bucketed = g != null
+                    val bucketed = group != null
                     m.metrics.forEachIndexed { index, met ->
-                        val bucketId = if (bucketed) fingerprint(met, g) else 0
+                        val bucketId = if (bucketed) fingerprint(met, group) else 0
                         if (buckets.containsKey(bucketId)) {
                             buckets[bucketId].add(index)
                         } else {
@@ -166,11 +131,11 @@ data class Aggregator(
                         }
                     }
 
-                    val ret = GridMat(m.metrics, m.timestamps, m.values.map { it.copyOf() })
-                    for (tsIdx in 0 until m.timestamps.size) {
+                    val ret = m.duplicate()
+                    for (tsIdx in 0 until m.colCount) {
                         buckets.forEach { _, bucket ->
                             for (metIdx in bucket.iterator()) {
-                                val v = m.values[metIdx][tsIdx]
+                                val v = m.series[metIdx].values[tsIdx]
                                 if (tops.size < k) {
                                     tops[v] = metIdx
                                 } else {
@@ -186,7 +151,8 @@ data class Aggregator(
                             val topMets = tops.values
                             for (metIdx in bucket.iterator()) {
                                 if (!topMets.contains(metIdx)) {
-                                    ret.values[metIdx][tsIdx] = Mat.StaleValue
+                                    // TODO: fix this dirty hack
+                                    ret.series[metIdx].values.write(tsIdx, Mat.StaleValue)
                                 }
                             }
                             tops.clear()
@@ -194,15 +160,15 @@ data class Aggregator(
                     }
                     ret.prune()
                 },
-                Aggregator("bottomk") { vals, a, n, g ->
-                    val kDbl = vals[0] as Scalar
+                VariadicAggregator("bottomk") { ec, args, group ->
+                    val kDbl = args[0] as RScalar
                     val k = kDbl.value.toInt()
-                    val m = vals[1] as GridMat
-                    val tops = Double2IntArrayMap(Math.min(k, m.values.size))
+                    val m = args[1] as RPointMatrix
+                    val tops = Double2IntArrayMap(Math.min(k, m.rowCount))
                     val buckets = Long2ObjectOpenHashMap<AbstractIntSet>(m.metrics.size)
-                    val bucketed = g != null
+                    val bucketed = group != null
                     m.metrics.forEachIndexed { index, met ->
-                        val bucketId = if (bucketed) fingerprint(met, g) else 0
+                        val bucketId = if (bucketed) fingerprint(met, group) else 0
                         if (buckets.containsKey(bucketId)) {
                             buckets[bucketId].add(index)
                         } else {
@@ -212,11 +178,11 @@ data class Aggregator(
                         }
                     }
 
-                    val ret = GridMat(m.metrics, m.timestamps, m.values.map { it.copyOf() })
-                    for (tsIdx in 0 until m.timestamps.size) {
+                    val ret = m.duplicate()
+                    for (tsIdx in 0 until m.colCount) {
                         buckets.forEach { _, bucket ->
                             for (metIdx in bucket.iterator()) {
-                                val v = m.values[metIdx][tsIdx]
+                                val v = m.series[metIdx].values[tsIdx]
                                 if (tops.size < k) {
                                     tops[v] = metIdx
                                 } else {
@@ -230,7 +196,7 @@ data class Aggregator(
                             val topMets = tops.values
                             for (metIdx in bucket.iterator()) {
                                 if (!topMets.contains(metIdx)) {
-                                    ret.values[metIdx][tsIdx] = Mat.StaleValue
+                                    ret.series[metIdx].values.write(tsIdx, Mat.StaleValue)
                                 }
                             }
                             tops.clear()
@@ -238,18 +204,18 @@ data class Aggregator(
                     }
                     ret.prune()
                 },
-                Aggregator("count_values") { vals, _, _, g ->
-                    val targetLabel = (vals[0] as StringValue).value
-                    val m = vals[1] as GridMat
+                VariadicAggregator("count_values") { ec, args, group ->
+                    val targetLabel = (args[0] as RString).value
+                    val m = args[1] as RPointMatrix
                     val metCache = Long2ObjectRBTreeMap<Metric>()
                     val counter = mutableMapOf<Pair<Int, Long>, Int>()
                     fun fingerprint(tsIdx: Int, metId: Int): Long {
-                        val baseMet = when (g?.typ) {
-                            AggregatorGroupType.By -> m.metrics[metId].filterOn(g.labels)
-                            AggregatorGroupType.Without -> m.metrics[metId].filterWithout(true, g.labels)
+                        val baseMet = when (group?.typ) {
+                            AggregatorGroupType.By -> m.metrics[metId].filterOn(group.labels)
+                            AggregatorGroupType.Without -> m.metrics[metId].filterWithout(true, group.labels)
                             else -> Metric.empty
                         }
-                        val v = m.values[metId][tsIdx]
+                        val v = m.series[metId].values[tsIdx]
                         val mb = baseMet.builder()
                         mb.put(targetLabel, Utils.fmtDouble(v))
                         val met = mb.build()
@@ -258,7 +224,7 @@ data class Aggregator(
                         return fp
                     }
                     // scan whole metrics
-                    for (tsIdx in 0 until m.timestamps.size) {
+                    for (tsIdx in 0 until m.colCount) {
                         for (metIdx in 0 until m.metrics.size) {
                             val fp = fingerprint(tsIdx, metIdx)
                             val key = tsIdx to fp
@@ -269,39 +235,95 @@ data class Aggregator(
                             }
                         }
                     }
-                    val metrics = metCache.values.toTypedArray()
-                    val values = metrics.map { met ->
+                    val metrics = metCache.values.toList()
+                    val timestamps = LongSlice.wrap(ec.frames.toLongArray())
+                    val series = metrics.map { met ->
                         val fp = met.fingerprint()
-                        DoubleArray(m.timestamps.size) { tsIdx ->
+                        val vals = DoubleSlice.init(m.colCount) { tsIdx ->
                             val ctr = counter[tsIdx to fp]!!
                             ctr.toDouble()
                         }
+                        RPoints(timestamps, vals)
                     }
-                    GridMat(metrics, m.timestamps, values)
+                    RPointMatrix(metrics, series)
                 },
-                Aggregator("quantile") { vals, a, node, g ->
-                    val q = (vals[0] as Scalar).value
-                    val m = vals[1] as GridMat
-                    simpleColMapping { values ->
-                        val dal = DoubleArrayList()
-                        DoubleArray(values[0].size) {
-                            for (i in 0 until values.size) {
-                                if (!Mat.isStale(values[i][it])) {
-                                    dal.add(values[i][it])
+                VariadicAggregator("quantile") { ec, args, group ->
+                    val q = (args[0] as RScalar).value
+                    val pm = args[1] as RPointMatrix
+                    val metrics = pm.metrics
+                    val timestamps = LongSlice.wrap(ec.frames.toLongArray())
+                    fun quantileFn(values: List<DoubleSlice>): DoubleSlice {
+                        val dal = DoubleArrayList(values.size)
+                        return DoubleSlice.init(values[0].size) { tsIdx ->
+                            for (metIdx in 0 until values.size) {
+                                val v = values[metIdx][tsIdx]
+                                if (!Mat.isStale(v)) {
+                                    dal.add(v)
                                 }
                             }
-                            dal.trim()
-                            val vs = dal.elements()
-                            if (vs.isEmpty()) {
-                                return@DoubleArray Mat.StaleValue
+                            if (dal.isEmpty) {
+                                return@init Mat.StaleValue
                             }
-
-                            val ret = Utils.quantile(q, vs)
+                            dal.trim()
+                            val ret = Utils.quantile(q, dal.elements())
                             dal.clear()
                             ret
                         }
-                    }.invoke(listOf(m), a, node, g)
+                    }
+                    if (group == null) {
+                        val vs = pm.series.map { it.values }
+                        RPointMatrix(
+                                listOf(Metric.empty),
+                                listOf(RPoints(timestamps, quantileFn(vs)))
+                        )
+                    } else {
+                        val metAndGrouping = AggregatorPlanner.computeMetricsAndGrouping(pm.metrics, group)
+                        RPointMatrix(
+                                metAndGrouping.first,
+                                metAndGrouping.second.map { selIdxes ->
+                                    val vs = selIdxes.map { pm.series[it].values }
+                                    RPoints(timestamps, quantileFn(vs))
+                                }
+                        )
+                    }
                 }
         )
+        val builtins = (mappingAggregators + variadicAggregator).map { it.name to it }.toMap()
     }
 }
+
+class MappingAggregator(override val name: String, val fn: (List<DoubleSlice>) -> DoubleSlice) : Aggregator {
+    fun eval(ec: EvaluationContext, metrics: List<Metric>, args: List<RuntimeValue>, grouping: List<IntArray>?): RuntimeValue {
+        if (args.size != 1) {
+            throw PromQLException("only 1 parameter expected for $name")
+        }
+        val pm = args[0] as? RPointMatrix ?: throw PromQLException("instant-vector expected for $name")
+        return if (grouping == null) {
+            val vs = pm.series.map { it.values }
+            RPointMatrix(
+                    metrics,
+                    listOf(
+                            RPoints(LongSlice.wrap(ec.frames.toLongArray()), fn(vs))
+                    )
+            )
+        } else {
+            val groups = grouping.map { grpIndexes ->
+                grpIndexes.map { pm.series[it].values }
+            }
+            RPointMatrix(
+                    metrics,
+                    groups.map {
+                        RPoints(LongSlice.wrap(ec.frames.toLongArray()), fn(it))
+                    }
+            )
+        }
+    }
+
+}
+
+class VariadicAggregator(override val name: String, val fn: (ec: EvaluationContext, args: List<RuntimeValue>, group: AggregatorGroup?) -> RuntimeValue) : Aggregator {
+    fun eval(ec: EvaluationContext, args: List<RuntimeValue>, group: AggregatorGroup?): RuntimeValue {
+        return fn(ec, args, group)
+    }
+}
+

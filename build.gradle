@@ -61,6 +61,7 @@ jmh {
 
 dependencies {
     antlr 'org.antlr:antlr4:4.7.+'
+    compile 'fi.iki.yak:compression-gorilla:2.+'
     compile "com.xenomachina:kotlin-argparser:$kotlinArgparserVersion"
     compile 'com.google.guava:guava:27.0.1-jre'
     compile 'org.apache.parquet:parquet-avro:1.10.0'

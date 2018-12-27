@@ -22,7 +22,7 @@ public class EvalAst {
 
     public EvalAst() {
         gateway = new MockGateway();
-        interp = new Interpreter(gateway);
+        interp = new Interpreter(gateway, 1000L);
 
         String[] codes = new String[] {
             "1",
@@ -43,10 +43,10 @@ public class EvalAst {
                     ScrapedSample.Companion.create("d", (double)ts, new Pair<>("foo", "bar")),
                     ScrapedSample.Companion.create("e", (double)ts, new Pair<>("foo", "bar"))
                 );
-                gateway.pushScraped(String.format("a:%d", instance), ts, samples, false);
+                gateway.pushScraped(ts, samples, false);
             }
         }
-        gateway.pushScraped("terminator", 0, Arrays.asList(), true);
+        gateway.pushScraped(0, Arrays.asList(), true);
     }
 
     @Benchmark

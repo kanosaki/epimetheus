@@ -22,7 +22,6 @@ interface Meta : MetricRegistry {
     /**
      * Collects metrics with query, result must be sorted by its fingerprint
      */
-    fun lookupMetrics(query: MetricMatcher): List<Metric>
 
     fun metricIDs(query: MetricMatcher): List<Signature> {
         return lookupMetrics(query).map { it.fingerprint() }

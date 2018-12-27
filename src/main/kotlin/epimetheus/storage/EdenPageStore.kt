@@ -1,10 +1,8 @@
 package epimetheus.storage
 
 import epimetheus.CacheName.Prometheus.FRESH_SAMPLES
-import epimetheus.model.Mat
-import epimetheus.model.Metric
-import epimetheus.model.Series
-import epimetheus.model.TimeFrames
+import epimetheus.engine.plan.RPoints
+import epimetheus.model.*
 import epimetheus.pkg.textparse.ScrapedSample
 import it.unimi.dsi.fastutil.longs.Long2DoubleRBTreeMap
 import it.unimi.dsi.fastutil.longs.LongArrayList
@@ -136,9 +134,79 @@ class EdenPageStore(val ignite: Ignite, val windowSize: Long = 5 * 60 * 1000) : 
         return tsArray to vArray
     }
 
+    fun fetchInstant(metric: Metric, frames: TimeFrames, offset: Long): RPoints {
+        val metricID = metric.fingerprint()
+        val collectingKeys = mutableSetOf<EdenPageKey>()
+        for (t in frames) {
+            collectingKeys.add(EdenPageKey(metricID, windowKey(t)))
+            collectingKeys.add(EdenPageKey(metricID, windowKey(t, -1)))
+        }
+        val m = Long2DoubleRBTreeMap()
+        cache.getEntries(collectingKeys).forEach {
+            val v = it.value
+            for (i in 0 until v.values.size) {
+                m[v.timestamps[i]] = v.values[i]
+            }
+        }
+        val timestamps = LongArrayList()
+        val values = DoubleArray(frames.size) {
+            val originalTs = frames[it]
+            val t = originalTs - offset
+            val subMap = m.headMap(t + 1)
+            if (subMap.isEmpty()) {
+                timestamps.add(originalTs)
+                Mat.StaleValue
+            } else {
+                val lastKey = subMap.lastLongKey()
+                val delta = t - lastKey
+                if (delta > 5 * 60 * 1000) {
+                    timestamps.add(originalTs)
+                    Mat.StaleValue
+                } else {
+                    timestamps.add(lastKey)
+                    subMap[lastKey]
+                }
+            }
+        }
+        timestamps.trim()
+        return RPoints(LongSlice.wrap(timestamps.elements()), DoubleSlice.wrap(values))
+    }
+
+    fun fetchRange(metric: Metric, frames: TimeFrames, range: Long, offset: Long): List<RPoints> {
+        val metricID = metric.fingerprint()
+        val wkCache = LongOpenHashSet(frames.size * (range / windowSize).toInt())
+        // timestamp sorted keys
+        val collectingKeys = mutableListOf<EdenPageKey>()
+        for (originalTs in frames) {
+            val t = originalTs - offset - range
+            var pageDelta = 0
+            while (true) {
+                val wk = windowKey(t, pageDelta)
+                pageDelta++
+                if (wkCache.contains(wk)) {
+                    continue
+                }
+                collectingKeys.add(EdenPageKey(metricID, wk))
+                wkCache.add(wk)
+                if (wk > originalTs - offset) {
+                    break
+                }
+            }
+        }
+        val entriesBuffer = Array<EdenPage?>(collectingKeys.size) { null }
+        collectingKeys.withIndex().toList().parallelStream().forEach {
+            entriesBuffer[it.index] = cache[it.value]
+        }
+        return frames.map { originalTs ->
+            val rangeOlder = originalTs - offset - range
+            val rangeNewer = originalTs - offset
+            val kv = cutPage(collectingKeys, entriesBuffer, rangeOlder, rangeNewer)
+            RPoints(LongSlice.wrap(kv.first), DoubleSlice.wrap(kv.second)) // TODO: stop using cutPage and refer pages from slices directly
+        }
+    }
+
     fun collectRange(metric: Metric, frames: TimeFrames, range: Long, offset: Long): List<Pair<LongArray, DoubleArray>> {
         assert(range > 0)
-        val instance = metric.get(Metric.instanceLabel) ?: ""
         val metricID = metric.fingerprint()
         val wkCache = LongOpenHashSet(frames.size * (range / windowSize).toInt())
         // timestamp sorted keys
@@ -171,7 +239,6 @@ class EdenPageStore(val ignite: Ignite, val windowSize: Long = 5 * 60 * 1000) : 
     }
 
     fun collectInstant(metric: Metric, range: TimeFrames, offset: Long): Series {
-        val instance = metric.get(Metric.instanceLabel) ?: ""
         val metricID = metric.fingerprint()
         val collectingKeys = mutableSetOf<EdenPageKey>()
         for (t in range) {

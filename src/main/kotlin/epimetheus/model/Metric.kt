@@ -16,6 +16,7 @@ interface MetricRegistry {
     fun mustMetric(metricId: Long): Metric {
         return metric(metricId) ?: throw UndefinedMetricIDException(metricId)
     }
+    fun lookupMetrics(query: MetricMatcher): List<Metric>
 }
 
 class MetricBuilder(val labels: MutableList<Array<String>> = mutableListOf()) : Metric(labels) {
@@ -129,8 +130,8 @@ open class Metric(val lbls: List<Array<String>>) {
         return Metric(lbls.filter { onLabels.contains(it[0]) }.toMutableList())
     }
 
-    fun filterWithout(ignoreName: Boolean, ignoreLabels: List<String>): Metric {
-        return Metric(lbls.filter { !ignoreLabels.contains(it[0]) && (!ignoreName || it[0] != Metric.nameLabel) }.toMutableList())
+    fun filterWithout(removeName: Boolean, ignoreLabels: List<String>): Metric {
+        return Metric(lbls.filter { !ignoreLabels.contains(it[0]) && (!removeName || it[0] != Metric.nameLabel) }.toMutableList())
     }
 
     override fun toString(): String {
@@ -144,7 +145,7 @@ open class Metric(val lbls: List<Array<String>>) {
         return "$nameLabel{$labelsExpr}"
     }
 
-    override fun equals(other: Any?): Boolean {
+    private fun valuesEquals(other: Any?): Boolean {
         if (other === null) {
             return false
         }
@@ -161,6 +162,22 @@ open class Metric(val lbls: List<Array<String>>) {
             }
         }
         return true
+    }
+
+    override fun equals(other: Any?): Boolean {
+        if (other === null) {
+            return false
+        }
+        if (other === this) {
+            return true
+        }
+        return if (other is Metric) {
+            val ret = other.fp == this.fp
+            assert(valuesEquals(other) == ret)
+            ret
+        } else {
+            false
+        }
     }
 
     override fun hashCode(): Int {
@@ -201,6 +218,15 @@ open class Metric(val lbls: List<Array<String>>) {
                 al.add(arrayOf(labels[i].first, labels[i].second))
             }
             al.add(arrayOf(nameLabel, name))
+            al.sortBy { it[0] }
+            return Metric(al)
+        }
+
+        fun of(vararg labels: Pair<String, String>): Metric {
+            val al = ArrayList<Array<String>>(labels.size + 1)
+            for (i in 0 until labels.size) {
+                al.add(arrayOf(labels[i].first, labels[i].second))
+            }
             al.sortBy { it[0] }
             return Metric(al)
         }

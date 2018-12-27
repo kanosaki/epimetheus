@@ -1,11 +1,59 @@
 package epimetheus.storage
 
+import epimetheus.engine.plan.RPointMatrix
+import epimetheus.engine.plan.RPoints
+import epimetheus.engine.plan.RRangeMatrix
+import epimetheus.engine.plan.RRanges
 import epimetheus.model.*
 import epimetheus.pkg.textparse.ScrapedSample
 import it.unimi.dsi.fastutil.longs.LongArrayList
 import java.util.*
 
 class MockGateway() : Gateway, MetricRegistry {
+    override fun fetchInstant(metrics: List<Metric>, frames: TimeFrames, offset: Long): RPointMatrix {
+        val serieses = metrics
+                .sortedBy { it.fingerprint() }
+                .map {
+                    val sig = it.fingerprint()
+                    val wholeData = datum[sig]!!
+                    val timestamps = LongArrayList()
+                    val v = frames.map { originalTs ->
+                        val ts = originalTs - offset
+                        val subMap = wholeData.headMap(ts + 1)
+                        if (subMap.isEmpty()) {
+                            timestamps.add(originalTs)
+                            Mat.StaleValue
+                        } else {
+                            val lk = subMap.lastKey()!!
+                            val delta = ts - lk
+                            if (delta > 5 * 60 * 1000) {
+                                timestamps.add(originalTs)
+                                Mat.StaleValue
+                            } else {
+                                timestamps.add(lk)
+                                subMap[lk]!!
+                            }
+                        }
+                    }
+                    timestamps.trim()
+                    it to RPoints(LongSlice.wrap(timestamps.elements()), DoubleSlice.wrap(v.toDoubleArray()))
+                }
+        return RPointMatrix(serieses.map { it.first }, serieses.map { it.second })
+    }
+
+    override fun fetchRange(metrics: List<Metric>, frames: TimeFrames, range: Long, offset: Long): RRangeMatrix {
+        val values = metrics.map { m ->
+            val wholeData = datum[m.fingerprint()]!!
+            val pts = frames.map { f ->
+                val blocks = wholeData.filterKeys { k -> (f - range - offset) <= k && k <= (f - offset) }.toList()
+                val r = blocks.map { it.first }.toLongArray() to blocks.map { it.second }.toDoubleArray()
+                RPoints(LongSlice.wrap(r.first), DoubleSlice.wrap(r.second))
+            }
+            RRanges(pts)
+        }
+        return RRangeMatrix(metrics, values, range, offset)
+    }
+
     //  NOTE: sortedmap sorts samples by ASC order
     // (timestamp, metricID) -> ScrapedSample
     val datum = mutableMapOf<Signature, SortedMap<Long, Double>>()
@@ -70,4 +118,9 @@ class MockGateway() : Gateway, MetricRegistry {
     override fun metric(metricId: Long): Metric? {
         return metrics[metricId]
     }
+
+    override fun lookupMetrics(query: MetricMatcher): List<Metric> {
+        return metrics.values.filter { query.matches(it) }
+    }
+
 }
