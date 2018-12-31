@@ -1,6 +1,7 @@
 package epimetheus.engine
 
 import epimetheus.CacheName
+import epimetheus.engine.plan.RPointMatrix
 import epimetheus.model.*
 import epimetheus.pkg.promql.Expression
 import epimetheus.pkg.promql.PromQL
@@ -21,6 +22,7 @@ import org.junit.jupiter.api.TestFactory
 import org.junit.jupiter.api.fail
 import org.junit.jupiter.api.function.Executable
 import java.io.File
+import java.nio.file.Paths
 import java.time.Duration
 
 
@@ -44,7 +46,7 @@ class InterpreterEngine() : TargetEngine {
 class EvaluatorEngine() : TargetEngine {
     lateinit var evaluator: Engine
     override fun init(gateway: Gateway) {
-        var evaluator = Engine(gateway)
+        evaluator = Engine(gateway)
     }
 
     override fun evalAst(ast: Expression, tf: TimeFrames, tracer: Tracer): Value {
@@ -224,12 +226,14 @@ class PromSpec(val lines: List<String>, val context: SpecContext) : Executable {
                 println("====== Eval EXPECTED")
                 when (expected) {
                     is GridMat -> println(expected.toTable().printAll())
+                    is RPointMatrix -> println(expected.toTable().printAll())
                     is Scalar -> println("SCALAR ${expected.value}")
                     else -> println("UNKNOWN Value type: ${expected.javaClass}: $expected")
                 }
                 println("====== Eval ACTUAL")
                 when (result) {
                     is GridMat -> println(result.toTable().printAll())
+                    is RPointMatrix -> println(result.toTable().printAll())
                     is Scalar -> println("SCALAR ${result.value}")
                     else -> println("UNKNOWN Value type: ${result.javaClass}: $result")
                 }
@@ -277,13 +281,13 @@ class PromSpec(val lines: List<String>, val context: SpecContext) : Executable {
 }
 
 object PromSpecTests {
+    val specdir = Paths.get("src", "test", "resources", "epimetheus", "engine", "promspec", "prometheus").toFile()
     /**
      * Spec files ported from prometheus repository
      */
     @TestFactory
-    fun withMockStorage(): Collection<DynamicTest> {
-        val res = PromSpecTests::class.java.getResource("promspec/prometheus")
-        val files = File(res.path).listFiles()
+    fun withMockStorageInterpreter(): Collection<DynamicTest> {
+        val files = specdir.listFiles()
         return files.map {
             it.inputStream().use { input ->
                 val lines = IOUtils.readLines(input, Charsets.UTF_8)
@@ -294,11 +298,27 @@ object PromSpecTests {
         }
     }
 
+    /**
+     * Spec files ported from prometheus repository
+     */
+    @TestFactory
+    fun withMockStorageEngine(): Collection<DynamicTest> {
+        val files = specdir.listFiles()
+//        return files.filter { it.name == "operators.test" }.map {
+        return files.map {
+            it.inputStream().use { input ->
+                val lines = IOUtils.readLines(input, Charsets.UTF_8)
+                        .map { it.trim() }
+                val ctx = SpecContext(EvaluatorEngine()) { MockGateway() }
+                DynamicTest.dynamicTest(it.name, PromSpec(lines, ctx))
+            }
+        }
+    }
+
     @Tag("slow")
     @TestFactory
-    fun withIgniteStorage(): Collection<DynamicTest> {
-        val res = PromSpecTests::class.java.getResource("promspec/prometheus")
-        val files = File(res.path).listFiles()
+    fun withIgniteStorageInterpreter(): Collection<DynamicTest> {
+        val files = specdir.listFiles()
         val conf = IgniteConfiguration().apply {
             igniteInstanceName = "promspec"
         }
@@ -309,6 +329,30 @@ object PromSpecTests {
                 val lines = IOUtils.readLines(input, Charsets.UTF_8)
                         .map { it.trim() }
                 val ctx = SpecContext(InterpreterEngine()) {
+                    val ign = Ignition.getOrStart(conf)
+                    ign.destroyCache(CacheName.Prometheus.METRIC_META)
+                    ign.destroyCache(CacheName.Prometheus.FRESH_SAMPLES)
+                    IgniteGateway(ign)
+                }
+                DynamicTest.dynamicTest(it.name, PromSpec(lines, ctx))
+            }
+        }
+    }
+
+    @Tag("slow")
+    @TestFactory
+    fun withIgniteStorageEngine(): Collection<DynamicTest> {
+        val files = specdir.listFiles()
+        val conf = IgniteConfiguration().apply {
+            igniteInstanceName = "promspec"
+        }
+        // preload to measure test exec time accurately
+        Ignition.getOrStart(conf)
+        return files.map {
+            it.inputStream().use { input ->
+                val lines = IOUtils.readLines(input, Charsets.UTF_8)
+                        .map { it.trim() }
+                val ctx = SpecContext(EvaluatorEngine()) {
                     val ign = Ignition.getOrStart(conf)
                     ign.destroyCache(CacheName.Prometheus.METRIC_META)
                     ign.destroyCache(CacheName.Prometheus.FRESH_SAMPLES)

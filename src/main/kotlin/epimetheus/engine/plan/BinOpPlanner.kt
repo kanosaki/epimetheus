@@ -57,7 +57,7 @@ class BinOpPlanner(val binding: Map<String, BOp>) {
                     return BinOpDynamicNode(VariableMetric, lhs, rhs, op, ast.matching)
                 }
                 else -> {
-                    throw PromQLException("${op.name} defined only between instant vectors")
+                    throw PromQLException("${op.name} defined only between instant vectors: lhs: ${lhs.javaClass} rhs: ${rhs.javaClass}")
                 }
             }
             else -> TODO()

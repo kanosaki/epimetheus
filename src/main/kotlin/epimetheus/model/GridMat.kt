@@ -98,7 +98,7 @@ interface Mat : Value {
     }
 }
 
-data class RangeGridMat(val metrics: List<Metric>, val timestamps: List<Long>, val windowSize: Long, val series: List<List<Pair<LongArray, DoubleArray>>>, override val offset: Long = 0) : Mat {
+data class RangeGridMat(val metrics: List<Metric>, val timestamps: TimeFrames, val windowSize: Long, val series: List<List<Pair<LongArray, DoubleArray>>>, override val offset: Long = 0) : Mat {
     fun applyUnifyFn(fn: (Metric, Long, LongArray, DoubleArray) -> Double): GridMat {
         val values = mutableListOf<DoubleArray>()
         for (mIdx in 0 until metrics.size) {

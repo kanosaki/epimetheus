@@ -5,7 +5,7 @@ import java.io.ObjectInput
 import java.io.ObjectOutput
 
 
-class DoubleSlice(val values: DoubleArray, val begin: Int, override val size: Int) : List<Double>, Externalizable {
+data class DoubleSlice(val values: DoubleArray, val begin: Int, override val size: Int) : List<Double>, Externalizable {
     companion object {
         fun wrap(a: DoubleArray): DoubleSlice {
             return DoubleSlice(a, 0, a.size)
@@ -125,9 +125,40 @@ class DoubleSlice(val values: DoubleArray, val begin: Int, override val size: In
     override fun toString(): String {
         return this.toList().toString()
     }
+
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (javaClass != other?.javaClass) return false
+
+        other as DoubleSlice
+
+        if (size != other.size) {
+            return false
+        }
+        for (i in 0 until size) {
+            if (values[i] != other[i]) {
+                return false
+            }
+        }
+        return true
+    }
+
+    override fun hashCode(): Int {
+        // from Arrays.hashCode
+        var result = 1
+        for (i in 0 until size) {
+            val v = values[i].toRawBits()
+            val elementHash = (v xor v.ushr(32)).toInt()
+            result = 31 * result + elementHash
+        }
+
+        result = 31 * result + begin
+        result = 31 * result + size
+        return result
+    }
 }
 
-class LongSlice(val values: LongArray, val begin: Int, override val size: Int) : List<Long> {
+data class LongSlice(val values: LongArray, val begin: Int, override val size: Int) : List<Long> {
     companion object {
         fun wrap(a: LongArray): LongSlice {
             return LongSlice(a, 0, a.size)
@@ -208,5 +239,35 @@ class LongSlice(val values: LongArray, val begin: Int, override val size: Int) :
 
     override fun toString(): String {
         return this.toList().toString()
+    }
+
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (javaClass != other?.javaClass) return false
+
+        other as LongSlice
+
+        if (size != other.size) {
+            return false
+        }
+        for (i in 0 until size) {
+            if (values[i] != other[i]) {
+                return false
+            }
+        }
+        return true
+    }
+
+    override fun hashCode(): Int {
+        // from Arrays.hashCode
+        var result = 1
+        for (i in 0 until size) {
+            val elementHash = (values[i] xor values[i].ushr(32)).toInt()
+            result = 31 * result + elementHash
+        }
+
+        result = 31 * result + begin
+        result = 31 * result + size
+        return result
     }
 }

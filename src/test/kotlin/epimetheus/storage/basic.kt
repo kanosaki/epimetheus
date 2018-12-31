@@ -17,8 +17,7 @@ class TestStorageIgnite {
     lateinit var ignite: Ignite
     @BeforeAll
     fun setUp() {
-        val conf = this.javaClass.getResource("/dev-config.xml")
-        ignite = Ignition.start(conf)
+        ignite = Ignition.start("conf/dev-config.xml")
     }
 
     @BeforeEach

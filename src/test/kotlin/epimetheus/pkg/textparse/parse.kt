@@ -2,6 +2,7 @@ package epimetheus.pkg.textparse
 
 import org.antlr.v4.runtime.CharStreams
 import org.junit.jupiter.api.Test
+import java.io.File
 import kotlin.test.assertEquals
 
 class ParseTest {
@@ -38,7 +39,7 @@ class ParseTest {
      */
     @Test
     fun parseSamplePage() {
-        this.javaClass.getResource("/exporter_testdata.txt").openStream().use { input ->
+        File("src/test/resources/exporter_testdata.txt").inputStream().use { input ->
             ExporterParser.parse(CharStreams.fromStream(input))
         }
     }

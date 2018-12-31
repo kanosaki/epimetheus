@@ -11,6 +11,10 @@ class Exec(val gateway: Gateway, val planner: Planner) {
         val plan = planner.plan(ast, PlannerContext())
         val ec = EvaluationContext(frames, gateway, Aggregator.builtins, Function.builtins)
         val res = plan.evaluate(ec)
-        return res
+        return if (res is RPointMatrix) {
+            res.sortSeries()
+        } else {
+            res
+        }
     }
 }

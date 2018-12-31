@@ -3,6 +3,9 @@ package epimetheus.engine.plan
 import epimetheus.model.*
 import epimetheus.pkg.promql.*
 import epimetheus.storage.Gateway
+import tech.tablesaw.api.StringColumn
+import tech.tablesaw.api.Table
+import tech.tablesaw.columns.Column
 
 class Planner(
         val storage: Gateway,
@@ -109,6 +112,16 @@ data class RPoints(val timestamps: LongSlice, val values: DoubleSlice) : Runtime
     fun isEmpty(): Boolean {
         return values.isEmpty() || values.all { Mat.isStale(it) }
     }
+
+    companion object {
+        inline fun init(timestamps: List<Long>, fn: (Int, Long) -> Double): RPoints {
+            val ts = LongSlice.wrap(timestamps.toLongArray())
+            val vals = DoubleSlice.init(ts.size) { idx ->
+                fn(idx, ts[idx])
+            }
+            return RPoints(ts, vals)
+        }
+    }
 }
 
 data class RRanges(val ranges: List<RPoints>)
@@ -118,24 +131,24 @@ interface RData : RuntimeValue {
     val offset: Long
 }
 
-data class RRangeMatrix(override val metrics: List<Metric>, val chunks: List<RRanges>, val range: Long, override val offset: Long = 0) : RData {
-    inline fun unify(frames: List<Long>, fn: (Long, LongSlice, DoubleSlice) -> Double): RPointMatrix {
+data class RRangeMatrix(override val metrics: List<Metric>, val chunks: List<RRanges>, val frames: TimeFrames, val range: Long, override val offset: Long = 0) : RData {
+    inline fun unify(fn: (Long, LongSlice, DoubleSlice) -> Double): RPointMatrix {
         val frameSlice = LongSlice.wrap(frames.toLongArray()) // TODO: optimize
         return RPointMatrix(metrics, chunks.map { rRanges ->
             val vs = DoubleSlice.init(rRanges.ranges.size) { i ->
                 val ts = frames[i]
                 val ranges = rRanges.ranges[i]
-                assert(ranges.timestamps.size == 1 || ranges.timestamps.first() <= ts && ts <= ranges.timestamps.last()) {
-                    "skewed timestamp! ${ranges.timestamps.first()}(range begin) <= $ts(frame timestamp) <= ${ranges.timestamps.last()}(range end)"
-                }
+//                assert(ranges.timestamps.size == 1 || ranges.timestamps.first() <= ts && ts <= ranges.timestamps.last()) {
+//                    "skewed timestamp! ${ranges.timestamps.first()}(range begin) <= $ts(frame timestamp) <= ${ranges.timestamps.last()}(range end)"
+//                }
                 fn(ts, ranges.timestamps, ranges.values)
             }
             RPoints(frameSlice, vs)
-        })
+        }, frames)
     }
 }
 
-data class RPointMatrix(override val metrics: List<Metric>, val series: List<RPoints>, override val offset: Long = 0) : RData {
+data class RPointMatrix(override val metrics: List<Metric>, val series: List<RPoints>, val frames: TimeFrames, override val offset: Long = 0) : RData {
     init {
         assert(metrics.size == series.size)
     }
@@ -148,11 +161,11 @@ data class RPointMatrix(override val metrics: List<Metric>, val series: List<RPo
 
     // clone values, but not for metrics and timestamps
     fun duplicate(): RPointMatrix {
-        return RPointMatrix(metrics, series.map { it.duplicate() })
+        return RPointMatrix(metrics, series.map { it.duplicate() }, frames, offset)
     }
 
     inline fun mapValues(fn: (Double, Long, Int) -> Double): RPointMatrix {
-        return RPointMatrix(metrics, series.map { it.mapValues(fn) })
+        return RPointMatrix(metrics, series.map { it.mapValues(fn) }, frames, offset)
     }
 
     inline fun mapRow(fn: (DoubleSlice, LongSlice, Int) -> DoubleSlice): RPointMatrix {
@@ -161,18 +174,45 @@ data class RPointMatrix(override val metrics: List<Metric>, val series: List<RPo
                 series.mapIndexed { index, rp ->
                     RPoints(rp.timestamps, fn(rp.values, rp.timestamps, index))
                 }
-        )
+        , frames, offset)
     }
 
     fun isIsomorphic(other: RPointMatrix): Boolean {
         if (this.metrics != other.metrics) return false
         if (this.series.size != other.series.size) return false
-        for (i in 0..this.series.size) {
+        for (i in 0 until this.series.size) {
             if (this.series[i].timestamps != other.series[i].timestamps) {
                 return false
             }
         }
         return true
+    }
+
+    fun toShapeTable(tableName: String = ""): Table {
+        val usedNames = mutableSetOf<String>()
+        fun mkUniqueName(n: String): String {
+            var name = n
+            var ctr = 1
+            while (usedNames.contains(name)) {
+                name = "$n$ctr"
+                ctr++
+            }
+            usedNames += name
+            return name
+        }
+        if (series.isEmpty()) {
+            return Table.create(tableName)
+        }
+
+        val timestamps = series.map { it.timestamps }
+        val cols = Array<Column<*>>(series.first().timestamps.size + 1) { i ->
+            if (i == 0) {
+                StringColumn.create("shape", metrics.map { it.toString() })
+            } else {
+                StringColumn.create(mkUniqueName(frames[i - 1].toString()), timestamps.map { it[i - 1].toString() })
+            }
+        }
+        return Table.create(tableName, *cols)
     }
 
     fun prune(): RPointMatrix {
@@ -185,7 +225,7 @@ data class RPointMatrix(override val metrics: List<Metric>, val series: List<RPo
                 sels.add(series[i])
             }
         }
-        return RPointMatrix(mets, sels)
+        return RPointMatrix(mets, sels, frames, offset)
     }
 
     fun sortSeries(): RPointMatrix {
@@ -195,15 +235,54 @@ data class RPointMatrix(override val metrics: List<Metric>, val series: List<RPo
             Row(metrics[i], series[i])
         }
         rows.sortBy { it.m.fingerprint() }
-        return RPointMatrix(rows.map { it.m }, rows.map { it.s })
+        return RPointMatrix(rows.map { it.m }, rows.map { it.s }, frames, offset)
     }
 
+    fun toTable(tableName: String = ""): Table {
+        val usedNames = mutableSetOf<String>()
+        fun mkUniqueName(n: String): String {
+            var name = n
+            var ctr = 1
+            while (usedNames.contains(name)) {
+                name = "$n$ctr"
+                ctr++
+            }
+            usedNames += name
+            return name
+        }
+        if (series.isEmpty()) {
+            return Table.create(tableName)
+        }
+
+        val values = series.map { it.values.toList() }
+        val timestamps: List<Long> = if (series.isNotEmpty()) {
+            val sampleTs = series[0].timestamps
+            if (series.all { it.timestamps == sampleTs }) {
+                sampleTs
+            } else {
+                TODO("implement")
+            }
+        } else {
+            listOf()
+        }
+
+        val cols = Array<Column<*>>(timestamps.size + 1) { i ->
+            if (i == 0) {
+                StringColumn.create(mkUniqueName("metric"), metrics.map { it.toString() })
+            } else {
+                StringColumn.create(mkUniqueName(timestamps[i - 1].toString()), values.map { Mat.formatValue(it[i - 1]) })
+            }
+        }
+        return Table.create(tableName, *cols)
+    }
+
+
     companion object {
-        fun of(timestamps: List<Long>, vararg series: Pair<Metric, List<Double>>): RPointMatrix {
+        fun of(frames: TimeFrames, vararg series: Pair<Metric, List<Double>>): RPointMatrix {
             val metrics = series.map { it.first }
-            val tses = LongSlice.wrap(timestamps.toLongArray())
+            val tses = LongSlice.wrap(frames.toLongArray())
             val sels = series.map { RPoints(tses, DoubleSlice.wrap(it.second.toDoubleArray())) }
-            return RPointMatrix(metrics, sels).sortSeries()
+            return RPointMatrix(metrics, sels, frames).sortSeries()
         }
     }
 }

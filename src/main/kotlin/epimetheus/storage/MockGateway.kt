@@ -38,7 +38,7 @@ class MockGateway() : Gateway, MetricRegistry {
                     timestamps.trim()
                     it to RPoints(LongSlice.wrap(timestamps.elements()), DoubleSlice.wrap(v.toDoubleArray()))
                 }
-        return RPointMatrix(serieses.map { it.first }, serieses.map { it.second })
+        return RPointMatrix(serieses.map { it.first }, serieses.map { it.second }, frames)
     }
 
     override fun fetchRange(metrics: List<Metric>, frames: TimeFrames, range: Long, offset: Long): RRangeMatrix {
@@ -51,7 +51,7 @@ class MockGateway() : Gateway, MetricRegistry {
             }
             RRanges(pts)
         }
-        return RRangeMatrix(metrics, values, range, offset)
+        return RRangeMatrix(metrics, values, frames, range, offset)
     }
 
     //  NOTE: sortedmap sorts samples by ASC order

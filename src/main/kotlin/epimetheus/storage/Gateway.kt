@@ -48,14 +48,14 @@ class IgniteGateway(private val ignite: Ignite) : Gateway, AutoCloseable {
 
     override fun fetchInstant(metrics: List<Metric>, frames: TimeFrames, offset: Long): RPointMatrix {
         val vals = metrics.parallelStream().map { eden.fetchInstant(it, frames, offset) }.toList()
-        return RPointMatrix(metrics, vals)
+        return RPointMatrix(metrics, vals, frames)
     }
 
     override fun fetchRange(metrics: List<Metric>, frames: TimeFrames, range: Long, offset: Long): RRangeMatrix {
         val vals = metrics.parallelStream().map { met ->
             RRanges(eden.fetchRange(met, frames, range, offset))
         }
-        return RRangeMatrix(metrics, vals.toList(), range, offset)
+        return RRangeMatrix(metrics, vals.toList(), frames, range, offset)
     }
 
     override fun collectRange(query: MetricMatcher, frames: TimeFrames, range: Long, offset: Long): RangeGridMat {

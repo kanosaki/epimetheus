@@ -72,7 +72,7 @@ interface Aggregator {
                         max
                     }
                 },
-                MappingAggregator("stdev") { values ->
+                MappingAggregator("stddev") { values ->
                     DoubleSlice.init(values[0].size) {
                         var aux = 0.0
                         var count = 0.0
@@ -245,7 +245,7 @@ interface Aggregator {
                         }
                         RPoints(timestamps, vals)
                     }
-                    RPointMatrix(metrics, series)
+                    RPointMatrix(metrics, series, ec.frames)
                 },
                 VariadicAggregator("quantile") { ec, args, group ->
                     val q = (args[0] as RScalar).value
@@ -274,7 +274,8 @@ interface Aggregator {
                         val vs = pm.series.map { it.values }
                         RPointMatrix(
                                 listOf(Metric.empty),
-                                listOf(RPoints(timestamps, quantileFn(vs)))
+                                listOf(RPoints(timestamps, quantileFn(vs))),
+                                ec.frames
                         )
                     } else {
                         val metAndGrouping = AggregatorPlanner.computeMetricsAndGrouping(pm.metrics, group)
@@ -283,7 +284,8 @@ interface Aggregator {
                                 metAndGrouping.second.map { selIdxes ->
                                     val vs = selIdxes.map { pm.series[it].values }
                                     RPoints(timestamps, quantileFn(vs))
-                                }
+                                },
+                                ec.frames
                         )
                     }
                 }
@@ -298,23 +300,30 @@ class MappingAggregator(override val name: String, val fn: (List<DoubleSlice>) -
             throw PromQLException("only 1 parameter expected for $name")
         }
         val pm = args[0] as? RPointMatrix ?: throw PromQLException("instant-vector expected for $name")
+        if (pm.series.isEmpty()) {
+            return RPointMatrix(pm.metrics, pm.series, ec.frames)
+        }
         return if (grouping == null) {
             val vs = pm.series.map { it.values }
+            // TODO: use GridMat
             RPointMatrix(
                     metrics,
                     listOf(
                             RPoints(LongSlice.wrap(ec.frames.toLongArray()), fn(vs))
-                    )
+                    ),
+                    ec.frames
             )
         } else {
             val groups = grouping.map { grpIndexes ->
                 grpIndexes.map { pm.series[it].values }
             }
+            // TODO: use GridMat
             RPointMatrix(
                     metrics,
                     groups.map {
                         RPoints(LongSlice.wrap(ec.frames.toLongArray()), fn(it))
-                    }
+                    },
+                    ec.frames
             )
         }
     }

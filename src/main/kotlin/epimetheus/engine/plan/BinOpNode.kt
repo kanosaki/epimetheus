@@ -3,20 +3,22 @@ package epimetheus.engine.plan
 import epimetheus.pkg.promql.PromQLException
 import epimetheus.pkg.promql.VectorMatching
 
-data class BinOpArithMatMatNode(override val metric: FixedMetric, val opMapping: List<IntArray>, val rhs: InstantNode, val lhs: InstantNode, val op: NumericBinOp) : InstantNode {
+data class BinOpArithMatMatNode(override val metric: FixedMetric, val opMapping: List<IntArray>, val lhs: InstantNode, val rhs: InstantNode, val op: NumericBinOp) : InstantNode {
     override fun evaluate(ec: EvaluationContext): RuntimeValue {
         val lv = lhs.evaluate(ec)
         val rv = rhs.evaluate(ec)
         return when {
             lv is RPointMatrix && rv is RPointMatrix -> {
-                assert(lv.isIsomorphic(rv))
-
-                lv.mapRow { vs, ts, i ->
-                    val rhsSeries = rv.series[i]
-                    vs.mapCopy { j, l ->
-                        op.fn(l, rhsSeries.values[j])
+                val series = opMapping.map { lrIdx ->
+                    val lhsIndex = lrIdx[0]
+                    val rhsIndex = lrIdx[1]
+                    val lPoints = lv.series[lhsIndex]
+                    val rPoints = rv.series[rhsIndex]
+                    lPoints.mapValues { l, _, i ->
+                        op.fn(l, rPoints.values[i])
                     }
                 }
+                RPointMatrix(metric.metrics, series, ec.frames)
             }
             else -> throw PromQLException("$op is not defined between $lhs and $rhs")
         }
@@ -52,7 +54,7 @@ data class BinOpDynamicNode(override val metric: MetricPlan, val lhs: InstantNod
                         op.fn(l, rPoints.values[i])
                     }
                 }
-                RPointMatrix(resultMetrics, series)
+                RPointMatrix(resultMetrics, series, ec.frames)
             }
             is SetBinOp -> {
                 val adoptIndexes = op.fn(lv.metrics, rv.metrics, matching)
@@ -61,7 +63,7 @@ data class BinOpDynamicNode(override val metric: MetricPlan, val lhs: InstantNod
                 // TODO: resort metrics?
                 val metrics = lhsAdoptIndexes.map { lv.metrics[it] } + rhsAdoptIndexes.map { rv.metrics[it] }
                 val values = lhsAdoptIndexes.map { lv.series[it] } + rhsAdoptIndexes.map { rv.series[it] }
-                RPointMatrix(metrics, values)
+                RPointMatrix(metrics, values, ec.frames)
             }
             else -> TODO("never here")
         }

@@ -46,8 +46,12 @@ data class BoolConvertNode(
         val v = value.evaluate(ec)
         return when (v) {
             is RScalar -> RScalar(ValueUtils.boolConvert(v.value))
-            is RPointMatrix -> v.mapValues { d, _, _ ->
-                ValueUtils.boolConvert(d)
+            is RPointMatrix -> {
+                val m = v.mapValues { d, _, _ ->
+                    ValueUtils.boolConvert(d)
+                }
+                val mets = v.metrics.map { it.filterWithout(true, listOf()) }
+                RPointMatrix(mets, m.series, v.frames, v.offset)
             }
             else -> throw PromQLException("cannot convert ${v.javaClass} to bool")
         }
@@ -59,7 +63,7 @@ data class ContantRPointMatrixNode(override val metric: FixedMetric, val values:
         val metSize = metric.metrics.size
         val timestamps = LongSlice.wrap(ec.frames.toLongArray())
         val series = (0 until metSize).map { RPoints(timestamps, values) }
-        return RPointMatrix(metric.metrics, series)
+        return RPointMatrix(metric.metrics, series, ec.frames)
     }
 }
 

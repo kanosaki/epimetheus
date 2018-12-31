@@ -1,13 +1,16 @@
 package epimetheus.engine.plan
 
+import epimetheus.EpimetheusException
 import epimetheus.model.*
 import epimetheus.pkg.promql.PromQLException
 import epimetheus.pkg.promql.Utils
+import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap
 import java.time.Instant
 import java.time.YearMonth
 import java.time.ZoneId
 import java.time.ZonedDateTime
 import java.time.temporal.ChronoField
+import java.util.regex.PatternSyntaxException
 
 interface Function {
     val name: String
@@ -16,7 +19,7 @@ interface Function {
 
     companion object {
         private fun extrapolatedRate(m: RRangeMatrix, frames: TimeFrames, isCounter: Boolean, isRate: Boolean): RPointMatrix {
-            return m.unify(frames) { ts, timestamps, values ->
+            return m.unify { ts, timestamps, values ->
                 val rangeStart = ts - m.range - m.offset
                 val rangeEnd = ts - m.offset
 
@@ -88,7 +91,7 @@ interface Function {
         }
 
         private fun instantValue(m: RRangeMatrix, frames: TimeFrames, isRate: Boolean): RPointMatrix {
-            return m.unify(frames) { ts, timestamps, values ->
+            return m.unify { ts, timestamps, values ->
                 if (values.size < 2) {
                     return@unify Mat.StaleValue
                 }
@@ -119,7 +122,7 @@ interface Function {
                 },
                 MapFunction("avg_over_time") { ctx, args ->
                     val m = args[0] as RRangeMatrix
-                    m.unify(ctx.frames) { _, _, vs ->
+                    m.unify { _, _, vs ->
                         vs.average()
                     }
                 },
@@ -129,7 +132,7 @@ interface Function {
                 },
                 MapFunction("changes") { ctx, args ->
                     val m = args[0] as RRangeMatrix
-                    m.unify(ctx.frames) { _, _, vs ->
+                    m.unify { _, _, vs ->
                         when {
                             vs.size < 2 -> 0.0
                             else -> {
@@ -158,7 +161,7 @@ interface Function {
                 },
                 MapFunction("count_over_time") { ctx, args ->
                     val m = args[0] as RRangeMatrix
-                    m.unify(ctx.frames) { _, _, vs ->
+                    m.unify { _, _, vs ->
                         vs.count { !Mat.isStale(it) }.toDouble()
                     }
                 },
@@ -168,7 +171,7 @@ interface Function {
                 },
                 MapFunction("deriv") { ctx, args ->
                     val m = args[0] as RRangeMatrix
-                    m.unify(ctx.frames) { ts, timestamps, values ->
+                    m.unify { ts, timestamps, values ->
                         val res = linearRegression(values, timestamps, timestamps[0])
                         res[0] // return slope
                     }
@@ -199,7 +202,7 @@ interface Function {
                     if (tf <= 0.0 || tf >= 1.0) {
                         throw PromQLException("invalid trend factor. Expected: 0 < tf < 1, got: ${tf}")
                     }
-                    m.unify(ctx.frames) { ts, timestamps, values ->
+                    m.unify { ts, timestamps, values ->
                         val l = values.size
                         if (l < 2) {
                             return@unify Mat.StaleValue
@@ -246,7 +249,7 @@ interface Function {
                 },
                 MapFunction("max_over_time") { ctx, args ->
                     val m = args[0] as RRangeMatrix
-                    m.unify(ctx.frames) { _, _, vs ->
+                    m.unify { _, _, vs ->
                         var ret: Double? = null
                         // Mat.StaleValue is a NaN but vs.max() returns NaN if there is any NaN.
                         for (v in vs) {
@@ -263,7 +266,7 @@ interface Function {
                 },
                 MapFunction("min_over_time") { ctx, args ->
                     val m = args[0] as RRangeMatrix
-                    m.unify(ctx.frames) { _, _, vs ->
+                    m.unify { _, _, vs ->
                         var ret: Double? = null
                         // Mat.StaleValue is a NaN but vs.max() returns NaN if there is any NaN.
                         for (v in vs) {
@@ -281,17 +284,17 @@ interface Function {
                 MapFunction("predict_linear") { ctx, args ->
                     val m = args[0] as RRangeMatrix
                     val s = args[1] as RScalar
-                    m.unify(ctx.frames) { ts, timestamps, values ->
+                    m.unify { ts, timestamps, values ->
                         val res = linearRegression(values, timestamps, ts)
                         val slope = res[0]
                         val intercept = res[1]
                         slope * s.value + intercept
                     }
                 },
-                MapFunction("quantile_over_time") { ctx, args ->
+                MapFunction("quantile_over_time", mainParamIndex = 1) { ctx, args ->
                     val q = (args[0] as RScalar).value
                     val m = args[1] as RRangeMatrix
-                    m.unify(ctx.frames) { _, _, values ->
+                    m.unify { _, _, values ->
                         if (values.isEmpty()) {
                             return@unify Mat.StaleValue
                         }
@@ -305,7 +308,7 @@ interface Function {
                 },
                 MapFunction("resets") { ctx, args ->
                     val m = args[0] as RRangeMatrix
-                    m.unify(ctx.frames) { _, _, vs ->
+                    m.unify { _, _, vs ->
                         when {
                             vs.size < 2 -> 0.0
                             else -> {
@@ -340,7 +343,7 @@ interface Function {
                 },
                 MapFunction("stddev_over_time") { ctx, args ->
                     val m = args[0] as RRangeMatrix
-                    m.unify(ctx.frames) { _, _, values ->
+                    m.unify { _, _, values ->
                         var aux = 0.0
                         var count = 0.0
                         var mean = 0.0
@@ -355,7 +358,7 @@ interface Function {
                 },
                 MapFunction("stdvar_over_time") { ctx, args ->
                     val m = args[0] as RRangeMatrix
-                    m.unify(ctx.frames) { _, _, values ->
+                    m.unify { _, _, values ->
                         var aux = 0.0
                         var count = 0.0
                         var mean = 0.0
@@ -370,7 +373,7 @@ interface Function {
                 },
                 MapFunction("sum_over_time") { ctx, args ->
                     val m = args[0] as RRangeMatrix
-                    m.unify(ctx.frames) { _, _, vs ->
+                    m.unify { _, _, vs ->
                         vs.sum()
                     }
                 },
@@ -399,40 +402,57 @@ interface Function {
                     override val name = "absent"
 
                     override fun plan(params: List<PlanNode>): PlanNode {
-                        TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
+                        // absent couldn't pre-compute metrics because it must handle staleness
+                        return FunctionNode(name, VariableMetric, params)
                     }
 
                     override fun eval(ec: EvaluationContext, metrics: MetricPlan, args: List<RuntimeValue>, params: List<PlanNode>): RuntimeValue {
-                        TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
+                        // absent function shoud try to be smart about its returing labels if passed argument is instant-selecot
+                        val m = args[0] as RPointMatrix
+                        if (m.series.any { !it.isEmpty() }) {
+                            return RPointMatrix(listOf(), listOf(), ec.frames)
+                        }
+                        val p0 = params[0]
+                        val met = when (p0) {
+                            is InstantSelectorNode -> {
+                                val resSel = p0.ast.matcher.matchers
+                                        .filter { it.second.lmt == LabelMatchType.Eq && it.second.value != Metric.nameLabel }
+                                        .map { arrayOf(it.first, it.second.value) }
+                                MetricBuilder(resSel.toMutableList()).build()
+                            }
+                            else -> Metric.empty
+                        }
+                        return RPointMatrix(listOf(met), listOf(RPoints.init(ec.frames) { _, _ -> 1.0 }), ec.frames)
                     }
                 },
                 object : Function {
                     override val name = "time"
 
                     override fun plan(params: List<PlanNode>): PlanNode {
-                        TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
+                        return FunctionNode(name, VariableMetric, params)
                     }
 
                     override fun eval(ec: EvaluationContext, metrics: MetricPlan, args: List<RuntimeValue>, params: List<PlanNode>): RuntimeValue {
-                        TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
+                        return RScalar(ec.frames.first() / 1000.0)
                     }
                 },
                 object : Function {
                     override val name = "vector"
 
                     override fun plan(params: List<PlanNode>): PlanNode {
-                        TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
+                        return FunctionNode(name, VariableMetric, params)
                     }
 
                     override fun eval(ec: EvaluationContext, metrics: MetricPlan, args: List<RuntimeValue>, params: List<PlanNode>): RuntimeValue {
-                        TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
+                        val arg = args[0] as RScalar
+                        return RPointMatrix(listOf(Metric.empty), listOf(RPoints.init(ec.frames) { _, _ -> arg.value }), ec.frames)
                     }
                 },
                 object : Function {
                     override val name = "scalar"
 
                     override fun plan(params: List<PlanNode>): PlanNode {
-                        TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
+                        return FunctionNode(name, VariableMetric, params)
                     }
 
                     override fun eval(ec: EvaluationContext, metrics: MetricPlan, args: List<RuntimeValue>, params: List<PlanNode>): RuntimeValue {
@@ -443,33 +463,204 @@ interface Function {
                     override val name = "histogram_quantile"
 
                     override fun plan(params: List<PlanNode>): PlanNode {
-                        TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
+                        return FunctionNode(name, VariableMetric, params)
                     }
 
                     override fun eval(ec: EvaluationContext, metrics: MetricPlan, args: List<RuntimeValue>, params: List<PlanNode>): RuntimeValue {
-                        TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
+                        val q = (args[0] as RScalar).value
+                        val m = args[1] as RPointMatrix
+
+                        data class Bucket(val upperBound: Double, val count: Double)
+                        data class MetricWithBuckets(val metric: Metric, val buckets: MutableList<Bucket>)
+
+                        fun bucketQuantile(buckets: MutableList<Bucket>): Double {
+                            if (q < 0) {
+                                return Double.NEGATIVE_INFINITY
+                            }
+                            if (q > 1) {
+                                return Double.POSITIVE_INFINITY
+                            }
+                            if (buckets.size < 2) {
+                                return Double.NaN
+                            }
+                            buckets.sortBy { it.upperBound }
+                            fun ensureMonotonic(buckets: MutableList<Bucket>) {
+                                var max = buckets.first().count
+                                for (i in 1 until buckets.size) {
+                                    when {
+                                        buckets[i].count > max -> max = buckets[i].count
+                                        buckets[i].count < max -> buckets[i] = Bucket(buckets[i].upperBound, max)
+                                    }
+                                }
+                            }
+                            ensureMonotonic(buckets)
+                            var rank = q * buckets.last().count
+                            val b = buckets.indexOfFirst { it.count >= rank } // TODO: binary search
+                            if (b == buckets.size - 1) {
+                                return buckets[buckets.size - 2].upperBound
+                            }
+                            if (b == 0 && buckets.first().upperBound <= 0) {
+                                return buckets.first().upperBound
+                            }
+                            var bucketStart = 0.0
+                            val bucketEnd = buckets[b].upperBound
+                            var count = buckets[b].count
+                            if (b > 0) {
+                                bucketStart = buckets[b - 1].upperBound
+                                count -= buckets[b - 1].count
+                                rank -= buckets[b - 1].count
+                            }
+                            return bucketStart + (bucketEnd - bucketStart) * (rank / count)
+                        }
+
+                        fun sigf(met: Metric): Long {
+                            return met.filteredFingerprint(false, listOf(Metric.bucketLabel), true)
+                        }
+                        // TODO: check series size
+
+                        val timestampSize = m.series[0].timestamps.size
+                        val columAccumlator = Array<List<Pair<Metric, Double>>>(timestampSize) { emptyList() }
+
+                        for (tsIdx in 0 until timestampSize) {
+                            val sigToMetBuckets = Long2ObjectOpenHashMap<MetricWithBuckets>()
+                            for (metIdx in 0 until m.metrics.size) {
+                                val met = m.metrics[metIdx]
+                                val upperBound = Utils.parseDouble(met.get(Metric.bucketLabel))
+                                        ?: continue // TODO: warn
+                                val hash = sigf(met)
+                                val mb = sigToMetBuckets[hash]
+                                if (mb == null) {
+                                    val newMet = met.filterWithout(true, listOf(Metric.bucketLabel))
+                                    sigToMetBuckets[hash] = MetricWithBuckets(newMet, mutableListOf(Bucket(upperBound, m.series[metIdx].values[tsIdx])))
+                                } else {
+                                    mb.buckets.add(Bucket(upperBound, m.series[metIdx].values[tsIdx]))
+                                }
+                            }
+                            val res = mutableListOf<Pair<Metric, Double>>()
+                            sigToMetBuckets.values.forEach { mb ->
+                                if (!mb.buckets.isEmpty()) {
+                                    res.add(mb.metric to bucketQuantile(mb.buckets))
+                                }
+                            }
+                            columAccumlator[tsIdx] = res
+                        }
+                        val metrics = columAccumlator
+                                .flatMap { col -> col.map { kv -> kv.first } }
+                                .distinct()
+                                .sortedBy { it.fingerprint() }
+                        return RPointMatrix(
+                                metrics,
+                                metrics.map { met ->
+                                    RPoints.init(ec.frames) { tsIdx, _ ->
+                                        columAccumlator[tsIdx].firstOrNull {
+                                            it.first == met
+                                        }?.second ?: Mat.StaleValue
+                                    }
+                                },
+                                ec.frames)
                     }
                 },
                 object : Function {
                     override val name = "label_replace"
 
                     override fun plan(params: List<PlanNode>): PlanNode {
-                        TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
+                        return FunctionNode(name, VariableMetric, params)
                     }
 
                     override fun eval(ec: EvaluationContext, metrics: MetricPlan, args: List<RuntimeValue>, params: List<PlanNode>): RuntimeValue {
-                        TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
+                        val m = args[0] as RPointMatrix
+                        val dst = args[1] as RString
+                        val repl = args[2] as RString
+                        val src = args[3] as RString
+                        val regexStr = args[4] as RString
+                        try {
+                            val replacePat = Regex("""\$(\d+)""")
+                            val pat = Regex(regexStr.value)
+                            val dedupeCache = mutableSetOf<Signature>()
+                            val replacedMetrics = m.metrics.map {
+                                val srcVal = it.get(src.value) ?: ""
+                                val match = pat.matchEntire(srcVal)
+                                if (match == null) {
+                                    val fp = it.fingerprint()
+                                    if (dedupeCache.contains(fp)) {
+                                        throw PromQLException("label_replace cannot create duplicated metrics")
+                                    }
+                                    dedupeCache.add(fp)
+                                    return@map it
+                                } else {
+                                    val dstVal = replacePat.replace(repl.value) { mr ->
+                                        val g0 = mr.groups[1]!!
+                                        val replIndex = g0.value.toInt()
+                                        match.groups[replIndex]?.value ?: ""
+                                    }
+                                    if (!Utils.isValidLabelName(dst.value)) {
+                                        throw PromQLException("${dst.value} is invalid as a label")
+                                    }
+                                    val mb = it.builder()
+                                    if (dstVal.isEmpty()) {
+                                        mb.remove(dst.value)
+                                    } else {
+                                        mb.put(dst.value, dstVal)
+                                    }
+                                    val met = mb.build()
+                                    val fp = met.fingerprint()
+                                    if (dedupeCache.contains(fp)) {
+                                        throw PromQLException("label_replace cannot create duplicated metrics")
+                                    }
+                                    dedupeCache.add(met.fingerprint())
+                                    return@map met
+                                }
+                            }
+                            try {
+                                return RPointMatrix(replacedMetrics, m.series, m.frames).sortSeries()
+                            } catch (e: EpimetheusException) {
+                                throw PromQLException(e.message)
+                            }
+                        } catch (pex: PatternSyntaxException) {
+                            throw PromQLException("invalid regex at label_replace: ${pex.message}")
+                        }
                     }
                 },
                 object : Function {
                     override val name = "label_join"
 
                     override fun plan(params: List<PlanNode>): PlanNode {
-                        TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
+                        return FunctionNode(name, VariableMetric, params)
                     }
 
                     override fun eval(ec: EvaluationContext, metrics: MetricPlan, args: List<RuntimeValue>, params: List<PlanNode>): RuntimeValue {
-                        TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
+                        val m = args[0] as RPointMatrix
+                        val dst = args[1] as RString
+                        val sep = args[2] as RString
+                        val sources = args.drop(3).map {
+                            it as RString
+                            if (!Utils.isValidLabelName(it.value)) {
+                                throw PromQLException("label name '${it.value}' at label_join is invalid")
+                            }
+                            it.value
+                        }
+                        try {
+                            val replacedMetrics = m.metrics.map { met ->
+                                val dstVal = sources.joinToString(sep.value) { srcMet -> met.get(srcMet) ?: "" }
+                                val mb = met.builder()
+                                if (!Utils.isValidLabelName(dst.value)) {
+                                    throw PromQLException("${dst.value} is invalid as a label")
+                                }
+                                if (dstVal.isEmpty()) {
+                                    mb.remove(dst.value)
+                                } else {
+                                    mb.put(dst.value, dstVal)
+                                }
+                                return@map mb.build()
+                            }
+                            try {
+                                return RPointMatrix(replacedMetrics, m.series, m.frames).sortSeries()
+                            } catch (e: EpimetheusException) {
+                                throw PromQLException(e.message)
+                            }
+                        } catch (pex: PatternSyntaxException) {
+                            throw PromQLException("invalid regex at label_replace: ${pex.message}")
+                        }
                     }
                 }
         )
@@ -523,7 +714,7 @@ class MapFunction(override val name: String, mainParamIndex: Int = 0, dropMetric
         val mets = determineMetrics(metrics, args)
         val series = fn(ec, args).series
         assert(mets.size == series.size)
-        return RPointMatrix(mets, series)
+        return RPointMatrix(mets, series, ec.frames)
     }
 }
 
@@ -547,7 +738,8 @@ open class ChronoFunction(override val name: String, val extractFn: (ZonedDateTi
             val ts = ec.frames.toList()
             val zdt = ZonedDateTime.ofInstant(Instant.ofEpochSecond(0), ZoneId.of("UTC"))
             val v = extractFn(zdt).toDouble()
-            RPointMatrix(listOf(Metric.empty), listOf(RPoints(LongSlice.wrap(ts.toLongArray()), DoubleSlice.init(ts.size) { v })))
+            // TODO: use GridMat
+            RPointMatrix(listOf(Metric.empty), listOf(RPoints(LongSlice.wrap(ts.toLongArray()), DoubleSlice.init(ts.size) { v })), ec.frames)
         } else {
             val m = args[0] as RPointMatrix
             val mets = determineMetrics(VariableMetric, args)
@@ -558,7 +750,7 @@ open class ChronoFunction(override val name: String, val extractFn: (ZonedDateTi
                     extractFn(zdt).toDouble()
                 }
             }
-            RPointMatrix(mets, mapped.series)
+            RPointMatrix(mets, mapped.series, ec.frames)
         }
     }
 }

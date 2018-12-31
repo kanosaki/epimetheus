@@ -8,9 +8,9 @@ interface BOp {
     val name: String
 
     companion object {
-        private inline fun staleGuard(isStale: Boolean, fn: () -> Double): Double {
-            return if (isStale) {
-                Mat.StaleValue
+        private inline fun nanGuard(isNan: Boolean, fn: () -> Double): Double {
+            return if (isNan) {
+                Double.NaN
             } else {
                 fn()
             }
@@ -35,10 +35,10 @@ interface BOp {
                     l * r
                 },
                 NumericBinOp("/", true) { l, r ->
-                    staleGuard(l == 0.0) { l / r }
+                    nanGuard(l == 0.0) { l / r }
                 },
                 NumericBinOp("%", true) { l, r ->
-                    staleGuard(l == 0.0) { l % r }
+                    nanGuard(l == 0.0) { l % r }
                 },
                 NumericBinOp("^") { l, r ->
                     Math.pow(l, r)
@@ -85,7 +85,7 @@ interface BOp {
                             null
                         }
                     }
-                    listOf<Int>() to resultMetrics
+                    (0 until lm.size).toList() to resultMetrics
                 },
                 SetBinOp("unless") { lm, rm, matching ->
                     val rightSigs = HashSet(rm.map { it.filteredFingerprint(matching.on, matching.matchingLabels, true) })

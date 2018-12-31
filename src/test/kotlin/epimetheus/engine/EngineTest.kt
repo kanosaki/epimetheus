@@ -37,28 +37,28 @@ class EngineTest {
         val cases = listOf(
                 Param("a",
                         TimeFrames.instant(0),
-                        RPointMatrix.of(listOf(0),
+                        RPointMatrix.of(TimeFrames.instant(0),
                                 Metric.of("a", "b" to "1") to listOf(1.0),
                                 Metric.of("a", "b" to "2") to listOf(2.0)
                         )
                 ),
                 Param("a",
                         TimeFrames.instant(1),
-                        RPointMatrix.of(listOf(1),
+                        RPointMatrix.of(TimeFrames.instant(1),
                                 Metric.of("a", "b" to "1") to listOf(3.0),
                                 Metric.of("a", "b" to "2") to listOf(4.0)
                         )
                 ),
                 Param("a",
                         TimeFrames(0, 1, 1),
-                        RPointMatrix.of(listOf(0, 1),
+                        RPointMatrix.of(TimeFrames(0, 1, 1),
                                 Metric.of("a", "b" to "1") to listOf(1.0, 3.0),
                                 Metric.of("a", "b" to "2") to listOf(2.0, 4.0)
                         )
                 ),
                 Param("a",
                         TimeFrames(1, 2, 1),
-                        RPointMatrix.of(listOf(1, 2),
+                        RPointMatrix.of(TimeFrames(1, 2, 1),
                                 Metric.of("a", "b" to "1") to listOf(3.0, 3.0),
                                 Metric.of("a", "b" to "2") to listOf(4.0, 4.0)
                         )
@@ -87,47 +87,47 @@ class EngineTest {
         val cases = listOf(
                 Param("sum(a)",
                         TimeFrames.instant(0),
-                        RPointMatrix.of(listOf(0),
+                        RPointMatrix.of(TimeFrames.instant(0),
                                 Metric.empty to listOf(10.0)
                         )
                 ),
                 Param("sum by (b) (a)",
                         TimeFrames.instant(0),
-                        RPointMatrix.of(listOf(0),
+                        RPointMatrix.of(TimeFrames.instant(0),
                                 Metric.of("b" to "1") to listOf(4.0),
                                 Metric.of("b" to "2") to listOf(6.0)
                         )
                 ),
                 Param("sum without (b) (a)",
                         TimeFrames.instant(0),
-                        RPointMatrix.of(listOf(0),
+                        RPointMatrix.of(TimeFrames.instant(0),
                                 Metric.of("c" to "1") to listOf(3.0),
                                 Metric.of("c" to "2") to listOf(7.0)
                         )
                 ),
                 Param("avg(a)",
                         TimeFrames.instant(0),
-                        RPointMatrix.of(listOf(0),
+                        RPointMatrix.of(TimeFrames.instant(0),
                                 Metric.empty to listOf(10.0 / 4.0)
                         )
                 ),
                 Param("avg by (b) (a)",
                         TimeFrames.instant(0),
-                        RPointMatrix.of(listOf(0),
+                        RPointMatrix.of(TimeFrames.instant(0),
                                 Metric.of("b" to "1") to listOf(4.0 / 2.0),
                                 Metric.of("b" to "2") to listOf(6.0 / 2.0)
                         )
                 ),
                 Param("avg without (b) (a)",
                         TimeFrames.instant(0),
-                        RPointMatrix.of(listOf(0),
+                        RPointMatrix.of(TimeFrames.instant(0),
                                 Metric.of("c" to "1") to listOf(3.0 / 2.0),
                                 Metric.of("c" to "2") to listOf(7.0 / 2.0)
                         )
                 ),
                 Param("topk(1, a)",
                         TimeFrames.instant(0),
-                        RPointMatrix.of(listOf(0),
+                        RPointMatrix.of(TimeFrames.instant(0),
                                 Metric.of("a", "b" to "2", "c" to "2") to listOf(4.0)
                         )
                 )
@@ -153,7 +153,7 @@ class EngineTest {
         val cases = listOf(
                 Param("sum_over_time(a{b=\"1\"}[10s])",
                         TimeFrames(10 * 1000, 20 * 1000, 5 * 1000),
-                        RPointMatrix.of(listOf(10*1000, 15*1000, 20 * 1000),
+                        RPointMatrix.of(TimeFrames(10 * 1000, 20 * 1000, 5 * 1000),
                                 Metric.of("b" to "1") to listOf(4.0, 3.0, 8.0)
                         )
                 )
