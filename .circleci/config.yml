@@ -31,12 +31,13 @@ jobs:
             - v1-dependencies-
 
       - run: gradle dependencies
-      - run: gradle generateGrammarSource
 
       - save_cache:
           paths:
             - ~/.gradle
           key: v1-dependencies-{{ checksum "build.gradle" }}
+
+      - run: gradle generateGrammarSource
 
       # run tests!
       - run: gradle test
