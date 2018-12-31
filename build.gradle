@@ -48,7 +48,7 @@ sourceSets {
 }
 
 jmh {
-    include = ['.*EvalAst.*', '.*ParseBench.*']
+    include = ['.*EvalAst.*']
     includeTests = true
     duplicateClassesStrategy = 'warn'
     warmupIterations = 1
@@ -116,4 +116,8 @@ generateGrammarSource {
 
 test {
     useJUnitPlatform()
+}
+
+shadowJar {
+    zip64 true
 }
