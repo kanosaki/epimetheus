@@ -1,5 +1,6 @@
 package epimetheus.prometheus.api
 
+import epimetheus.engine.Engine
 import epimetheus.engine.Interpreter
 import epimetheus.model.LabelMatchType
 import epimetheus.model.LabelMatcher
@@ -72,11 +73,21 @@ class APIHandlerFactory(val vertx: Vertx, val gateway: Gateway) {
                         val start = queryTimeParam(ctx, "start")
                         val end = queryTimeParam(ctx, "end")
                         val step = queryDuration(ctx, "step")
-                        val interp = Interpreter(gateway, 500)
                         val r = ctx.response()
-                        val value = interp.eval(query, TimeFrames(start.toEpochMilli(), end.toEpochMilli(), step.toMillis()))
-                        val result = toResult(value)
-                        r.end(Json.encode(Response("success", result, null, null)))
+                        try {
+                            val interp = Engine(gateway, 500)
+                            val value = interp.exec(query, TimeFrames(start.toEpochMilli(), end.toEpochMilli(), step.toMillis()))
+                            val result = toResult(value)
+                            r.end(Json.encode(Response("success", result, null, null)))
+                        } catch (e: Throwable) {
+                            e.printStackTrace()
+                            println(e.message)
+                            r.statusCode = when (e) {
+                                is InvalidRequestException -> 400
+                                else -> 500
+                            }
+                            r.end(Json.encode(Response("error", null, e.javaClass.simpleName, e.message)))
+                        }
                     }
             route("/series")
                     .handler { ctx ->

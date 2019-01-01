@@ -5,7 +5,7 @@ import java.io.ObjectInput
 import java.io.ObjectOutput
 
 
-data class DoubleSlice(val values: DoubleArray, val begin: Int, override val size: Int) : List<Double>, Externalizable {
+data class DoubleSlice(val values: DoubleArray, val begin: Int, override val size: Int) : List<Double> {
     companion object {
         fun wrap(a: DoubleArray): DoubleSlice {
             return DoubleSlice(a, 0, a.size)
@@ -35,14 +35,6 @@ data class DoubleSlice(val values: DoubleArray, val begin: Int, override val siz
         for (i in 0 until size) {
             values[begin + i] = fn(i, values[begin + i])
         }
-    }
-
-    override fun readExternal(inp: ObjectInput?) {
-        TODO()
-    }
-
-    override fun writeExternal(out: ObjectOutput?) {
-        TODO()
     }
 
     override fun contains(element: Double): Boolean {

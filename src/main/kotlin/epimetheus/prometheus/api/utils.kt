@@ -1,5 +1,8 @@
 package epimetheus.prometheus.api
 
+import epimetheus.engine.plan.RPointMatrix
+import epimetheus.engine.plan.RScalar
+import epimetheus.engine.plan.RString
 import epimetheus.model.GridMat
 import epimetheus.model.Scalar
 import epimetheus.model.StringValue
@@ -67,6 +70,28 @@ object Util {
                 Result("scalar", v.value)
             }
             is StringValue -> {
+                Result("string", v.value)
+            }
+            is RPointMatrix -> {
+                val resultType = if (v.series[0].timestamps.size == 1) {
+                    "vector"
+                } else {
+                    "matrix"
+                }
+                val series = mutableListOf<SeriesResult>()
+                v.series.forEachIndexed { i, s ->
+                    val values = mutableListOf<List<Any>>()
+                    for (j in 0 until s.timestamps.size) {
+                        values += listOf(s.timestamps[j]/1e3, s.values[j].toString())
+                    }
+                    series += SeriesResult(v.metrics[i].toSortedMap(), values)
+                }
+                Result(resultType, series)
+            }
+            is RScalar -> {
+                Result("scalar", v.value)
+            }
+            is RString -> {
                 Result("string", v.value)
             }
             else -> {
