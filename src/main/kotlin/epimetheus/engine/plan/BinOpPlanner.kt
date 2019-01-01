@@ -1,5 +1,10 @@
 package epimetheus.engine.plan
 
+import epimetheus.engine.EngineContext
+import epimetheus.engine.graph.*
+import epimetheus.engine.primitive.BOp
+import epimetheus.engine.primitive.NumericBinOp
+import epimetheus.engine.primitive.SetBinOp
 import epimetheus.model.Metric
 import epimetheus.pkg.promql.*
 import it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap
@@ -8,7 +13,7 @@ import it.unimi.dsi.fastutil.longs.LongArraySet
 
 
 class BinOpPlanner(val binding: Map<String, BOp>) {
-    fun plan(planner: Planner, ast: BinaryCall, ctx: PlannerContext): PlanNode {
+    fun plan(planner: Planner, ast: BinaryCall, ctx: EngineContext): PlanNode {
         val lhs = planner.plan(ast.lhs, ctx)
         val rhs = planner.plan(ast.rhs, ctx)
         val op = binding[ast.op.name] ?: throw PromQLException("binary operator '${ast.op.name}' is not defined")
@@ -18,7 +23,7 @@ class BinOpPlanner(val binding: Map<String, BOp>) {
                     planMatMat(op, ast.matching, lhs, rhs)
                 }
                 lhs is ScalarLiteralNode && rhs is InstantNode -> {
-                    val mp = rhs.metric
+                    val mp = rhs.metPlan
                     if (mp is FixedMetric) {
                         val metrics = if (op.shouldDropMetricName) {
                             mp.metrics.map { it.filterWithout(true, listOf()) }
@@ -31,7 +36,7 @@ class BinOpPlanner(val binding: Map<String, BOp>) {
                     }
                 }
                 lhs is InstantNode && rhs is ScalarLiteralNode -> {
-                    val mp = lhs.metric
+                    val mp = lhs.metPlan
                     if (mp is FixedMetric) {
                         val metrics = if (op.shouldDropMetricName) {
                             mp.metrics.map { it.filterWithout(true, listOf()) }
@@ -70,8 +75,8 @@ class BinOpPlanner(val binding: Map<String, BOp>) {
             throw PromQLException("many-to-many only allowed for set operators")
         }
 
-        val lhsMetrics = oLhs.metric as? FixedMetric
-        val rhsMetrics = oRhs.metric as? FixedMetric
+        val lhsMetrics = oLhs.metPlan as? FixedMetric
+        val rhsMetrics = oRhs.metPlan as? FixedMetric
         if (lhsMetrics == null || rhsMetrics == null) {
             return BinOpDynamicNode(VariableMetric, oLhs, oRhs, op, matching)
         }

@@ -1,5 +1,6 @@
 package epimetheus.storage
 
+import epimetheus.CacheName
 import epimetheus.engine.plan.RPointMatrix
 import epimetheus.engine.plan.RRangeMatrix
 import epimetheus.engine.plan.RRanges
@@ -8,6 +9,7 @@ import epimetheus.pkg.textparse.ExporterParser
 import epimetheus.pkg.textparse.ScrapedSample
 import org.antlr.v4.runtime.CharStreams
 import org.apache.ignite.Ignite
+import org.apache.ignite.lang.IgniteCallable
 import org.apache.parquet.ParquetReadOptions
 import org.apache.parquet.example.data.simple.convert.GroupRecordConverter
 import org.apache.parquet.hadoop.ParquetFileReader
@@ -36,7 +38,7 @@ interface Gateway {
     val metricRegistry: MetricRegistry
 }
 
-class IgniteGateway(private val ignite: Ignite) : Gateway, AutoCloseable {
+class IgniteGateway(val ignite: Ignite) : Gateway, AutoCloseable {
     val eden = EdenPageStore(ignite)
     val aged = Aged(ignite)
     override val metricRegistry = IgniteMeta(ignite)
@@ -47,12 +49,16 @@ class IgniteGateway(private val ignite: Ignite) : Gateway, AutoCloseable {
     }
 
     override fun fetchInstant(metrics: List<Metric>, frames: TimeFrames, offset: Long): RPointMatrix {
-        val vals = metrics.parallelStream().map { eden.fetchInstant(it, frames, offset) }.toList()
+        val vals = metrics
+                .parallelStream()
+                .map { eden.fetchInstant(it, frames, offset) }.toList()
         return RPointMatrix(metrics, vals, frames)
     }
 
     override fun fetchRange(metrics: List<Metric>, frames: TimeFrames, range: Long, offset: Long): RRangeMatrix {
-        val vals = metrics.parallelStream().map { met ->
+        val vals = metrics
+                .parallelStream()
+                .map { met ->
             RRanges(eden.fetchRange(met, frames, range, offset))
         }
         return RRangeMatrix(metrics, vals.toList(), frames, range, offset)
@@ -71,6 +77,10 @@ class IgniteGateway(private val ignite: Ignite) : Gateway, AutoCloseable {
         val mets = metricRegistry.lookupMetrics(query)
         val vals = mets.parallelStream().map { eden.collectInstant(it, range, offset) }.toList()
         return GridMat.concatSeries(vals, range)
+    }
+
+    fun <V> affinityCall(metric: Metric, callable: IgniteCallable<V>): V {
+        return ignite.compute().affinityCall(CacheName.Prometheus.FRESH_SAMPLES, metric.fingerprint(), callable)
     }
 
     override fun close() {

@@ -1,5 +1,10 @@
 package epimetheus.engine.plan
 
+import epimetheus.engine.EngineContext
+import epimetheus.engine.graph.*
+import epimetheus.engine.primitive.Aggregator
+import epimetheus.engine.primitive.BOp
+import epimetheus.engine.primitive.Function
 import epimetheus.model.*
 import epimetheus.pkg.promql.*
 import epimetheus.storage.Gateway
@@ -13,7 +18,7 @@ class Planner(
         val functionPlanner: FunctionPlanner = FunctionPlanner(Function.builtins),
         val aggregatorPlanner: AggregatorPlanner = AggregatorPlanner(Aggregator.builtins)) {
 
-    fun plan(ast: Expression, ctx: PlannerContext): PlanNode {
+    fun plan(ast: Expression, ctx: EngineContext): PlanNode {
         return when (ast) {
             is NumberLiteral -> {
                 ScalarLiteralNode(ast.value)
@@ -39,7 +44,7 @@ class Planner(
             is BoolConvert -> {
                 val v = plan(ast.expr, ctx)
                 return when (v) {
-                    is InstantNode -> BoolConvertNode(ast, v.metric, v)
+                    is InstantNode -> BoolConvertNode(v.metPlan, v)
                     is ScalarLiteralNode -> ScalarLiteralNode(ValueUtils.boolConvert(v.value))
                     else -> throw PromQLException("cannot convert ${v.javaClass} to bool")
                 }
@@ -50,41 +55,24 @@ class Planner(
         }
     }
 
-    fun planInstant(ast: InstantSelector, ctx: PlannerContext): InstantSelectorNode {
+    fun planInstant(ast: InstantSelector, ctx: EngineContext): MergePointNode {
         val mets = storage.metricRegistry.lookupMetrics(ast.matcher)
-        return InstantSelectorNode(ast, FixedMetric(mets), ast.offset)
+        return MergePointNode(mets.map { InstantSelectorNode(ast, it,  ast.offset) }, ast)
     }
 
-    fun planMatrix(ast: MatrixSelector, ctx: PlannerContext): MatrixSelectorNode {
+    fun planMatrix(ast: MatrixSelector, ctx: EngineContext): MergeRangeNode {
         val mets = storage.metricRegistry.lookupMetrics(ast.matcher)
-        return MatrixSelectorNode(ast, FixedMetric(mets), ast.range, ast.offset)
+        return MergeRangeNode(mets.map { MatrixSelectorNode(it, ast.range, ast.offset) }, ast.range.toMillis())
     }
-}
-
-class PlannerContext {
 }
 
 interface MetricPlan {
 
 }
 
-data class FixedMetric(val metrics: List<Metric>) : MetricPlan {
-
-}
+data class FixedMetric(val metrics: List<Metric>) : MetricPlan
 
 object VariableMetric : MetricPlan
-
-object WildcardMetric : MetricPlan
-
-class EvaluationContext(
-        val frames: TimeFrames,
-        val gateway: Gateway,
-        val aggregators: Map<String, Aggregator>,
-        val functions: Map<String, Function>
-) {
-
-
-}
 
 interface RuntimeValue : Value { //temp name
 
@@ -146,6 +134,14 @@ data class RRangeMatrix(override val metrics: List<Metric>, val chunks: List<RRa
             RPoints(frameSlice, vs)
         }, frames)
     }
+
+    companion object {
+        fun merge(matrixes: List<RRangeMatrix>, frames: TimeFrames, range: Long): RRangeMatrix {
+            val metrics = matrixes.flatMap { it.metrics }
+            val ranges = matrixes.flatMap { it.chunks }
+            return RRangeMatrix(metrics, ranges, frames, range)
+        }
+    }
 }
 
 data class RPointMatrix(override val metrics: List<Metric>, val series: List<RPoints>, val frames: TimeFrames, override val offset: Long = 0) : RData {
@@ -174,7 +170,7 @@ data class RPointMatrix(override val metrics: List<Metric>, val series: List<RPo
                 series.mapIndexed { index, rp ->
                     RPoints(rp.timestamps, fn(rp.values, rp.timestamps, index))
                 }
-        , frames, offset)
+                , frames, offset)
     }
 
     fun isIsomorphic(other: RPointMatrix): Boolean {
@@ -283,6 +279,12 @@ data class RPointMatrix(override val metrics: List<Metric>, val series: List<RPo
             val tses = LongSlice.wrap(frames.toLongArray())
             val sels = series.map { RPoints(tses, DoubleSlice.wrap(it.second.toDoubleArray())) }
             return RPointMatrix(metrics, sels, frames).sortSeries()
+        }
+
+        fun merge(matrixes: List<RPointMatrix>, frames: TimeFrames): RPointMatrix {
+            val metrics = matrixes.flatMap { it.metrics }
+            val series = matrixes.flatMap { it.series }
+            return RPointMatrix(metrics, series, frames)
         }
     }
 }

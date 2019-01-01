@@ -1,6 +1,9 @@
-package epimetheus.engine.plan
+package epimetheus.engine.primitive
 
 import epimetheus.EpimetheusException
+import epimetheus.engine.ExecContext
+import epimetheus.engine.graph.*
+import epimetheus.engine.plan.*
 import epimetheus.model.*
 import epimetheus.pkg.promql.PromQLException
 import epimetheus.pkg.promql.Utils
@@ -15,7 +18,7 @@ import java.util.regex.PatternSyntaxException
 interface Function {
     val name: String
     fun plan(params: List<PlanNode>): PlanNode
-    fun eval(ec: EvaluationContext, metrics: MetricPlan, args: List<RuntimeValue>, params: List<PlanNode>): RuntimeValue
+    fun eval(ec: ExecContext, metrics: MetricPlan, args: List<RuntimeValue>, params: List<PlanNode>): RuntimeValue
 
     companion object {
         private fun extrapolatedRate(m: RRangeMatrix, frames: TimeFrames, isCounter: Boolean, isRate: Boolean): RPointMatrix {
@@ -406,7 +409,7 @@ interface Function {
                         return FunctionNode(name, VariableMetric, params)
                     }
 
-                    override fun eval(ec: EvaluationContext, metrics: MetricPlan, args: List<RuntimeValue>, params: List<PlanNode>): RuntimeValue {
+                    override fun eval(ec: ExecContext, metrics: MetricPlan, args: List<RuntimeValue>, params: List<PlanNode>): RuntimeValue {
                         // absent function shoud try to be smart about its returing labels if passed argument is instant-selecot
                         val m = args[0] as RPointMatrix
                         if (m.series.any { !it.isEmpty() }) {
@@ -414,11 +417,15 @@ interface Function {
                         }
                         val p0 = params[0]
                         val met = when (p0) {
-                            is InstantSelectorNode -> {
-                                val resSel = p0.ast.matcher.matchers
-                                        .filter { it.second.lmt == LabelMatchType.Eq && it.second.value != Metric.nameLabel }
-                                        .map { arrayOf(it.first, it.second.value) }
-                                MetricBuilder(resSel.toMutableList()).build()
+                            is MergePointNode -> {
+                                if (p0.selectorHint == null) {
+                                    Metric.empty
+                                } else {
+                                    val resSel = p0.selectorHint.matcher.matchers
+                                            .filter { it.second.lmt == LabelMatchType.Eq && it.second.value != Metric.nameLabel }
+                                            .map { arrayOf(it.first, it.second.value) }
+                                    MetricBuilder(resSel.toMutableList()).build()
+                                }
                             }
                             else -> Metric.empty
                         }
@@ -432,7 +439,7 @@ interface Function {
                         return FunctionNode(name, VariableMetric, params)
                     }
 
-                    override fun eval(ec: EvaluationContext, metrics: MetricPlan, args: List<RuntimeValue>, params: List<PlanNode>): RuntimeValue {
+                    override fun eval(ec: ExecContext, metrics: MetricPlan, args: List<RuntimeValue>, params: List<PlanNode>): RuntimeValue {
                         return RScalar(ec.frames.first() / 1000.0)
                     }
                 },
@@ -443,7 +450,7 @@ interface Function {
                         return FunctionNode(name, VariableMetric, params)
                     }
 
-                    override fun eval(ec: EvaluationContext, metrics: MetricPlan, args: List<RuntimeValue>, params: List<PlanNode>): RuntimeValue {
+                    override fun eval(ec: ExecContext, metrics: MetricPlan, args: List<RuntimeValue>, params: List<PlanNode>): RuntimeValue {
                         val arg = args[0] as RScalar
                         return RPointMatrix(listOf(Metric.empty), listOf(RPoints.init(ec.frames) { _, _ -> arg.value }), ec.frames)
                     }
@@ -455,7 +462,7 @@ interface Function {
                         return FunctionNode(name, VariableMetric, params)
                     }
 
-                    override fun eval(ec: EvaluationContext, metrics: MetricPlan, args: List<RuntimeValue>, params: List<PlanNode>): RuntimeValue {
+                    override fun eval(ec: ExecContext, metrics: MetricPlan, args: List<RuntimeValue>, params: List<PlanNode>): RuntimeValue {
                         TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
                     }
                 },
@@ -466,7 +473,7 @@ interface Function {
                         return FunctionNode(name, VariableMetric, params)
                     }
 
-                    override fun eval(ec: EvaluationContext, metrics: MetricPlan, args: List<RuntimeValue>, params: List<PlanNode>): RuntimeValue {
+                    override fun eval(ec: ExecContext, metrics: MetricPlan, args: List<RuntimeValue>, params: List<PlanNode>): RuntimeValue {
                         val q = (args[0] as RScalar).value
                         val m = args[1] as RPointMatrix
 
@@ -567,7 +574,7 @@ interface Function {
                         return FunctionNode(name, VariableMetric, params)
                     }
 
-                    override fun eval(ec: EvaluationContext, metrics: MetricPlan, args: List<RuntimeValue>, params: List<PlanNode>): RuntimeValue {
+                    override fun eval(ec: ExecContext, metrics: MetricPlan, args: List<RuntimeValue>, params: List<PlanNode>): RuntimeValue {
                         val m = args[0] as RPointMatrix
                         val dst = args[1] as RString
                         val repl = args[2] as RString
@@ -628,7 +635,7 @@ interface Function {
                         return FunctionNode(name, VariableMetric, params)
                     }
 
-                    override fun eval(ec: EvaluationContext, metrics: MetricPlan, args: List<RuntimeValue>, params: List<PlanNode>): RuntimeValue {
+                    override fun eval(ec: ExecContext, metrics: MetricPlan, args: List<RuntimeValue>, params: List<PlanNode>): RuntimeValue {
                         val m = args[0] as RPointMatrix
                         val dst = args[1] as RString
                         val sep = args[2] as RString
@@ -671,22 +678,35 @@ interface Function {
     }
 }
 
+// needs radical improvements for mode generic implementation
 abstract class FunctionBase(val mainParamIndex: Int = 0, val dropMetricName: Boolean = true) : Function {
     override fun plan(params: List<PlanNode>): PlanNode {
         if (params.size <= mainParamIndex) {
             throw PromQLException("function $name requires ${mainParamIndex + 1} arguments but got ${params.size}")
         }
-        val pln = params[mainParamIndex] as InstantNode
-        val mp = pln.metric
-        return when (mp) {
-            is FixedMetric -> {
+        val pln = params[mainParamIndex]
+        return when (pln) {
+            is MergeNode -> {
                 if (dropMetricName) {
-                    FixedFunctionNode(name, FixedMetric(mp.metrics.map { it.filterWithout(true, listOf()) }), params)
+                    MergePointNode(
+                            pln.nodes.map {
+                                val splittedParams = params.mapIndexed { i, p -> if (i == mainParamIndex) it else p}
+                                val nameDroppedPlan = FixedMetric(it.metPlan.metrics.map { m ->
+                                    m.filterWithout(true, listOf())
+                                })
+                                FixedFunctionNode(name, nameDroppedPlan, splittedParams, it.affinity)
+                            }
+                    )
                 } else {
-                    FixedFunctionNode(name, mp, params)
+                    MergePointNode(
+                            pln.nodes.map {
+                                val splittedParams = params.mapIndexed { i, p -> if (i == mainParamIndex) it else p}
+                                FixedFunctionNode(name, it.metPlan, splittedParams, it.affinity)
+                            }
+                    )
                 }
             }
-            else -> FunctionNode(name, mp, params)
+            else -> FunctionNode(name, VariableMetric, params)
         }
     }
 
@@ -697,7 +717,7 @@ abstract class FunctionBase(val mainParamIndex: Int = 0, val dropMetricName: Boo
         return when (metricPlan) {
             is FixedMetric -> metricPlan.metrics
             else -> {
-                val pln = args[mainParamIndex] as RPointMatrix
+                val pln = args[mainParamIndex] as RPointMatrix // TODO: add RangeMatrix pattern
                 val mp = pln.metrics
                 return if (dropMetricName) {
                     mp.map { it.filterWithout(true, listOf()) }
@@ -709,8 +729,8 @@ abstract class FunctionBase(val mainParamIndex: Int = 0, val dropMetricName: Boo
     }
 }
 
-class MapFunction(override val name: String, mainParamIndex: Int = 0, dropMetricName: Boolean = true, val fn: (EvaluationContext, List<RuntimeValue>) -> RPointMatrix) : FunctionBase(mainParamIndex, dropMetricName) {
-    override fun eval(ec: EvaluationContext, metrics: MetricPlan, args: List<RuntimeValue>, params: List<PlanNode>): RuntimeValue {
+class MapFunction(override val name: String, mainParamIndex: Int = 0, dropMetricName: Boolean = true, val fn: (ExecContext, List<RuntimeValue>) -> RPointMatrix) : FunctionBase(mainParamIndex, dropMetricName) {
+    override fun eval(ec: ExecContext, metrics: MetricPlan, args: List<RuntimeValue>, params: List<PlanNode>): RuntimeValue {
         val mets = determineMetrics(metrics, args)
         val series = fn(ec, args).series
         assert(mets.size == series.size)
@@ -725,7 +745,7 @@ open class ChronoFunction(override val name: String, val extractFn: (ZonedDateTi
         } else {
             val p = params[0] as? InstantNode
                     ?: throw PromQLException("$name expects instant-vector but got ${params[0].javaClass}")
-            val mp = p.metric
+            val mp = p.metPlan
             when (mp) {
                 is FixedMetric -> FunctionNode(name, FixedMetric(mp.metrics.map { it.filterWithout(true, listOf()) }), params)
                 else -> FunctionNode(name, mp, params)
@@ -733,7 +753,7 @@ open class ChronoFunction(override val name: String, val extractFn: (ZonedDateTi
         }
     }
 
-    override fun eval(ec: EvaluationContext, metrics: MetricPlan, args: List<RuntimeValue>, params: List<PlanNode>): RuntimeValue {
+    override fun eval(ec: ExecContext, metrics: MetricPlan, args: List<RuntimeValue>, params: List<PlanNode>): RuntimeValue {
         return if (args.isEmpty()) {
             val ts = ec.frames.toList()
             val zdt = ZonedDateTime.ofInstant(Instant.ofEpochSecond(0), ZoneId.of("UTC"))

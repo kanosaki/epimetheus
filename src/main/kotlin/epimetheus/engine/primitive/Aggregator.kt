@@ -1,5 +1,7 @@
-package epimetheus.engine.plan
+package epimetheus.engine.primitive
 
+import epimetheus.engine.ExecContext
+import epimetheus.engine.plan.*
 import epimetheus.model.DoubleSlice
 import epimetheus.model.LongSlice
 import epimetheus.model.Mat
@@ -295,7 +297,7 @@ interface Aggregator {
 }
 
 class MappingAggregator(override val name: String, val fn: (List<DoubleSlice>) -> DoubleSlice) : Aggregator {
-    fun eval(ec: EvaluationContext, metrics: List<Metric>, args: List<RuntimeValue>, grouping: List<IntArray>?): RuntimeValue {
+    fun eval(ec: ExecContext, metrics: List<Metric>, args: List<RuntimeValue>, grouping: List<IntArray>?): RuntimeValue {
         if (args.size != 1) {
             throw PromQLException("only 1 parameter expected for $name")
         }
@@ -330,8 +332,8 @@ class MappingAggregator(override val name: String, val fn: (List<DoubleSlice>) -
 
 }
 
-class VariadicAggregator(override val name: String, val fn: (ec: EvaluationContext, args: List<RuntimeValue>, group: AggregatorGroup?) -> RuntimeValue) : Aggregator {
-    fun eval(ec: EvaluationContext, args: List<RuntimeValue>, group: AggregatorGroup?): RuntimeValue {
+class VariadicAggregator(override val name: String, val fn: (ec: ExecContext, args: List<RuntimeValue>, group: AggregatorGroup?) -> RuntimeValue) : Aggregator {
+    fun eval(ec: ExecContext, args: List<RuntimeValue>, group: AggregatorGroup?): RuntimeValue {
         return fn(ec, args, group)
     }
 }

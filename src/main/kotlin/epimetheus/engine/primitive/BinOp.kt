@@ -1,4 +1,4 @@
-package epimetheus.engine.plan
+package epimetheus.engine.primitive
 
 import epimetheus.model.Mat
 import epimetheus.model.Metric
