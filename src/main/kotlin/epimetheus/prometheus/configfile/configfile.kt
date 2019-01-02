@@ -13,7 +13,6 @@ import epimetheus.prometheus.scrape.ScrapeTarget
 import epimetheus.prometheus.scrape.ScrapeTargetKey
 import org.apache.http.client.utils.URIBuilder
 import org.apache.http.message.BasicNameValuePair
-import org.apache.ignite.cache.query.annotations.QuerySqlField
 import java.time.Duration
 
 object Parser {
@@ -25,7 +24,7 @@ object Parser {
 }
 
 
-class DurationDeserializer() : JsonDeserializer<Duration?>() {
+class DurationDeserializer : JsonDeserializer<Duration?>() {
     override fun deserialize(p: JsonParser?, ctxt: DeserializationContext?): Duration? {
         if (p == null) return null
         val txt = p.text
@@ -127,7 +126,8 @@ data class StaticConfig(@JsonProperty("targets") val targets: List<String>, @Jso
                 val entries = labels?.entries?.map { it.key to it.value }.orEmpty() + listOf("instance" to target, "job" to sc.name)
                 entries.joinToString(",") { """${it.first}="${it.second}"""" }
             }
-            ScrapeTargetKey(sc.name, target) to ScrapeTarget(uri.toString(), sc.scrapeIntervalSeconds(global), sc.honorLabels ?: false, sc.params ?: mapOf())
+            ScrapeTargetKey(sc.name, target) to ScrapeTarget(uri.toString(), sc.scrapeIntervalSeconds(global), sc.honorLabels
+                    ?: false, sc.params ?: mapOf())
         }
     }
 }

@@ -9,7 +9,7 @@ import org.apache.ignite.Ignite
 import org.apache.ignite.lang.IgniteCallable
 import org.apache.ignite.resources.IgniteInstanceResource
 
-class RemoteExec(val node: PlanNode, val ec: ExecContext): IgniteCallable<RuntimeValue> {
+class RemoteExec(val node: PlanNode, val ec: ExecContext) : IgniteCallable<RuntimeValue> {
     @IgniteInstanceResource
     lateinit var ignite: Ignite
 

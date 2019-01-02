@@ -34,7 +34,7 @@ abstract class Tracer {
     }
 
     fun elapsedMs(): Long? {
-        return if (end != null && begin != null){
+        return if (end != null && begin != null) {
             (end!! - begin!!) / 1000 / 1000
         } else {
             null

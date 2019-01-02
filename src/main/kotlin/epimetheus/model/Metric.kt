@@ -16,6 +16,7 @@ interface MetricRegistry {
     fun mustMetric(metricId: Long): Metric {
         return metric(metricId) ?: throw UndefinedMetricIDException(metricId)
     }
+
     fun lookupMetrics(query: MetricMatcher): List<Metric>
 }
 

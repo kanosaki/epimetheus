@@ -27,7 +27,7 @@ class EpimetheusServer(igniteConfig: IgniteConfiguration) : AutoCloseable {
     }
 
     fun boot() {
-        val apiNodes =ignite.cluster().forAttribute("api", "1")
+        val apiNodes = ignite.cluster().forAttribute("api", "1")
         ignite.services(apiNodes).deploy(
                 ServiceConfiguration().apply {
                     name = API_SERVER

@@ -2,8 +2,8 @@ package epimetheus.engine
 
 import epimetheus.model.GridMat
 import epimetheus.model.TimeRange
-import epimetheus.pkg.promql.MatrixSelector
 import epimetheus.pkg.promql.InstantSelector
+import epimetheus.pkg.promql.MatrixSelector
 import epimetheus.storage.IgniteGateway
 
 class Fetch(val storage: IgniteGateway) {

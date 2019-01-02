@@ -104,9 +104,7 @@ interface BOp {
     }
 }
 
-data class NumericBinOp(override val name: String, val shouldDropMetricName: Boolean = false, val fn: (Double, Double) -> Double) : BOp {
-
-}
+data class NumericBinOp(override val name: String, val shouldDropMetricName: Boolean = false, val fn: (Double, Double) -> Double) : BOp
 
 data class SetBinOp(override val name: String, val fn: (List<Metric>, List<Metric>, VectorMatching) -> Pair<List<Int>, List<Int>>) : BOp
 

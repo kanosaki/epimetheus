@@ -30,7 +30,7 @@ class AggregatorPlanner(val binding: Map<String, Aggregator>) {
     }
 
     companion object {
-        fun computeMetricsAndGrouping(metrics: List<Metric>,group: AggregatorGroup): Pair<List<Metric>, List<IntArray>> {
+        fun computeMetricsAndGrouping(metrics: List<Metric>, group: AggregatorGroup): Pair<List<Metric>, List<IntArray>> {
             val filteredMets = Long2ObjectRBTreeMap<Metric>()
             val filteredMetMapping = Long2ObjectOpenHashMap<IntArraySet>(metrics.size)
             metrics.forEachIndexed { index, met ->

@@ -8,7 +8,6 @@ import it.unimi.dsi.fastutil.longs.Long2DoubleRBTreeMap
 import it.unimi.dsi.fastutil.longs.LongArrayList
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet
 import org.apache.ignite.Ignite
-import org.apache.ignite.cache.CachePeekMode
 import org.apache.ignite.cache.affinity.AffinityKeyMapped
 import org.apache.ignite.configuration.CacheConfiguration
 import org.apache.ignite.stream.StreamTransformer
@@ -17,8 +16,7 @@ import java.util.*
 
 data class EdenPageKey(@AffinityKeyMapped val metricID: Long, val timestamp: Long)
 
-data class EdenPage(val values: DoubleArray, val timestamps: LongArray) {
-}
+data class EdenPage(val values: DoubleArray, val timestamps: LongArray)
 
 /**
  * FreshStorage is write intensive area. Affinity is defined by "instance" (in prometheus term)
@@ -230,7 +228,7 @@ class EdenPageStore(val ignite: Ignite, val windowSize: Long = 5 * 60 * 1000) : 
         }
         val entriesBuffer = Array<EdenPage?>(collectingKeys.size) { null }
         collectingKeys.withIndex().toList().parallelStream().forEach {
-            entriesBuffer[it.index] =  cache[it.value]
+            entriesBuffer[it.index] = cache[it.value]
         }
         return frames.map { originalTs ->
             val rangeOlder = originalTs - offset - range

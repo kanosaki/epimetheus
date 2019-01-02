@@ -4,5 +4,4 @@ import epimetheus.model.MetricMatcher
 
 interface LabelPredicate
 
-data class Query(val metricName: String, val labelsMatch: MetricMatcher) {
-}
+data class Query(val metricName: String, val labelsMatch: MetricMatcher)

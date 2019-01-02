@@ -57,7 +57,7 @@ class Planner(
 
     fun planInstant(ast: InstantSelector, ctx: EngineContext): MergePointNode {
         val mets = storage.metricRegistry.lookupMetrics(ast.matcher)
-        return MergePointNode(mets.map { InstantSelectorNode(ast, it,  ast.offset) }, ast)
+        return MergePointNode(mets.map { InstantSelectorNode(ast, it, ast.offset) }, ast)
     }
 
     fun planMatrix(ast: MatrixSelector, ctx: EngineContext): MergeRangeNode {
@@ -66,9 +66,7 @@ class Planner(
     }
 }
 
-interface MetricPlan {
-
-}
+interface MetricPlan
 
 data class FixedMetric(val metrics: List<Metric>) : MetricPlan
 

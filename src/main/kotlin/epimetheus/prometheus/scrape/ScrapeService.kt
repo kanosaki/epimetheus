@@ -20,7 +20,6 @@ import org.apache.ignite.services.ServiceContext
 import java.io.Closeable
 import java.time.LocalDateTime
 import java.time.temporal.ChronoUnit
-import java.util.concurrent.Executor
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
@@ -39,7 +38,7 @@ data class ScrapeSchedule(
 )
 
 
-class ScrapeService() : Service {
+class ScrapeService : Service {
     companion object {
         val ScanRangeMilliseconds = 10 * 1000L
     }
@@ -57,7 +56,7 @@ class ScrapeService() : Service {
     lateinit var targets: IgniteCache<ScrapeTargetKey, ScrapeTarget>
     lateinit var submitThread: ExecutorService
 
-    class StatusCacheInterceptor() : CacheInterceptorAdapter<ScrapeTargetKey, ScrapeSchedule>() {
+    class StatusCacheInterceptor : CacheInterceptorAdapter<ScrapeTargetKey, ScrapeSchedule>() {
         // TODO: notify?
         //override fun onBeforePut(entry: Cache.Entry<ScrapeTargetKey, ScrapeSchedule>?, newVal: ScrapeSchedule?): ScrapeSchedule? {
         //    if (newVal == null) return newVal
@@ -66,7 +65,7 @@ class ScrapeService() : Service {
         //}
     }
 
-    class TargetCacheInterceptor() : CacheInterceptorAdapter<ScrapeTargetKey, ScrapeTarget>() {
+    class TargetCacheInterceptor : CacheInterceptorAdapter<ScrapeTargetKey, ScrapeTarget>() {
         @Transient
         private var statuses: IgniteCache<ScrapeTargetKey, ScrapeSchedule>? = null
 

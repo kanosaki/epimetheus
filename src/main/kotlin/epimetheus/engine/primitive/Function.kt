@@ -690,7 +690,7 @@ abstract class FunctionBase(val mainParamIndex: Int = 0, val dropMetricName: Boo
                 if (dropMetricName) {
                     MergePointNode(
                             pln.nodes.map {
-                                val splittedParams = params.mapIndexed { i, p -> if (i == mainParamIndex) it else p}
+                                val splittedParams = params.mapIndexed { i, p -> if (i == mainParamIndex) it else p }
                                 val nameDroppedPlan = FixedMetric(it.metPlan.metrics.map { m ->
                                     m.filterWithout(true, listOf())
                                 })
@@ -700,7 +700,7 @@ abstract class FunctionBase(val mainParamIndex: Int = 0, val dropMetricName: Boo
                 } else {
                     MergePointNode(
                             pln.nodes.map {
-                                val splittedParams = params.mapIndexed { i, p -> if (i == mainParamIndex) it else p}
+                                val splittedParams = params.mapIndexed { i, p -> if (i == mainParamIndex) it else p }
                                 FixedFunctionNode(name, it.metPlan, splittedParams, it.affinity)
                             }
                     )

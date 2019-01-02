@@ -59,8 +59,8 @@ class IgniteGateway(val ignite: Ignite) : Gateway, AutoCloseable {
         val vals = metrics
                 .parallelStream()
                 .map { met ->
-            RRanges(eden.fetchRange(met, frames, range, offset))
-        }
+                    RRanges(eden.fetchRange(met, frames, range, offset))
+                }
         return RRangeMatrix(metrics, vals.toList(), frames, range, offset)
     }
 

@@ -9,7 +9,7 @@ import epimetheus.pkg.textparse.ScrapedSample
 import it.unimi.dsi.fastutil.longs.LongArrayList
 import java.util.*
 
-class MockGateway() : Gateway, MetricRegistry {
+class MockGateway : Gateway, MetricRegistry {
     override fun fetchInstant(metrics: List<Metric>, frames: TimeFrames, offset: Long): RPointMatrix {
         val serieses = metrics
                 .sortedBy { it.fingerprint() }
