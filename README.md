@@ -7,8 +7,8 @@ Epimetheus is a scalable time series database.
 Epimetheus goals are:
 
 * Prometheus compatible API
-* Highly scalable
-* Better query response time
+* Highly scalable storage
+* Highly scalable / better latency query engine
 * Easy cluster management
 
 We use Apache Ignite memory-centric data grid as a foundation.
