@@ -128,15 +128,23 @@ class ScrapeService : Service {
         }
     }
 
+    private fun updateTargetStatus(target: ScrapeTargetKey, succeed: Boolean) {
+        storage.pushScraped(System.currentTimeMillis(), listOf(
+                ScrapedSample.create("up", if (succeed) 1.0 else 0.0, "instance" to target.target)),
+                false) // TODO: false?
+    }
+
     private fun writeSamples(target: ScrapeTargetKey, cfg: ScrapeTarget, results: List<ScrapedSample>) {
-        storage.pushScraped(System.currentTimeMillis(), results.map {
-            val mb = it.met.builder()
-            if (!cfg.honorLabels) {
-                mb.put("instance", target.target)
-                mb.put("job", target.jobName)
-            }
-            ScrapedSample(mb.build(), it.value)
-        })
+        storage.pushScraped(System.currentTimeMillis(),
+                results.map {
+                    val mb = it.met.builder()
+                    if (!cfg.honorLabels) {
+                        mb.put("instance", target.target)
+                        mb.put("job", target.jobName)
+                    }
+                    ScrapedSample(mb.build(), it.value)
+                },
+                false) // TODO: false?
     }
 
 
@@ -152,11 +160,15 @@ class ScrapeService : Service {
                     // process background to avoid blocking vert.x event loop thread
                     submitThread.submit {
                         writeSamples(key, cfg, samples)
+                        updateTargetStatus(key, true)
                     }
                     ScrapeStatusSuccess(ar.result().latencyNs)
                 }
                 false -> {
                     println("SCRAPE FAILED ${cfg.url} ${ar.cause()}")
+                    submitThread.submit {
+                        updateTargetStatus(key, false)
+                    }
                     ScrapeStatusFailure(ar.cause())
                 }
             }
