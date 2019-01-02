@@ -1,11 +1,7 @@
 package epimetheus.model
 
-import java.io.Externalizable
-import java.io.ObjectInput
-import java.io.ObjectOutput
 
-
-data class DoubleSlice(val values: DoubleArray, val begin: Int, override val size: Int) : List<Double> {
+data class DoubleSlice(val values: DoubleArray, val begin: Int, val size: Int) {
     companion object {
         fun wrap(a: DoubleArray): DoubleSlice {
             return DoubleSlice(a, 0, a.size)
@@ -37,8 +33,8 @@ data class DoubleSlice(val values: DoubleArray, val begin: Int, override val siz
         }
     }
 
-    override fun contains(element: Double): Boolean {
-        for (i in begin..(begin + size)) {
+    fun contains(element: Double): Boolean {
+        for (i in begin until (begin + size)) {
             if (values[i] == element) {
                 return true
             }
@@ -46,77 +42,85 @@ data class DoubleSlice(val values: DoubleArray, val begin: Int, override val siz
         return false
     }
 
-    override fun containsAll(elements: Collection<Double>): Boolean {
-        TODO("not implemented")
+    fun isAllStale(): Boolean {
+        for (i in begin until (begin + size)) {
+            if (!Mat.isStale(values[i])) {
+                return false
+            }
+        }
+        return true
     }
 
-    override fun get(index: Int): Double {
+    fun toList(): List<Double> {
+        val ret = mutableListOf<Double>()
+        for (i in begin until (begin + size)) {
+            ret += values[i]
+        }
+        return ret
+    }
+
+    fun last(): Double {
+        if (size == 0) {
+            throw NoSuchElementException()
+        }
+        return values[begin + size - 1]
+    }
+
+    fun first(): Double {
+        if (size == 0) {
+            throw NoSuchElementException()
+        }
+        return values[begin]
+    }
+
+    inline fun count(pred: (Double) -> Boolean): Int {
+        var ret = 0
+        for (i in begin until (begin + size)) {
+            if (pred(values[i])) {
+                ret++
+            }
+        }
+        return ret
+    }
+
+    fun sum(): Double {
+        var ret = 0.0
+        for (i in begin until (begin + size)) {
+            ret += values[i]
+        }
+        return ret
+    }
+
+    operator fun get(index: Int): Double {
         if (index >= size) {
             throw IndexOutOfBoundsException(index.toString())
         }
         return values[begin + index]
     }
 
-    override fun indexOf(element: Double): Int {
-        TODO("not implemented")
-    }
-
-    override fun isEmpty(): Boolean {
+    fun isEmpty(): Boolean {
         return size == 0
     }
 
-    override fun iterator(): Iterator<Double> {
+    operator fun iterator(): DoubleIterator {
         return SliceIterator(values, begin, size)
     }
 
-    override fun lastIndexOf(element: Double): Int {
-        TODO("not implemented")
-    }
-
-    override fun listIterator(): ListIterator<Double> {
-        return SliceIterator(values, begin, size)
-    }
-
-    override fun listIterator(index: Int): ListIterator<Double> {
-        return SliceIterator(values, begin + index, size - index)
-    }
-
-    override fun subList(fromIndex: Int, toIndex: Int): List<Double> {
-        TODO("not implemented")
-    }
-
-    class SliceIterator(val values: DoubleArray, val begin: Int, val size: Int) : ListIterator<Double> {
-        var ptr = 0
-        override fun hasNext(): Boolean {
-            return ptr < size
-        }
-
-        override fun hasPrevious(): Boolean {
-            return ptr > 0
-        }
-
-        override fun next(): Double {
+    class SliceIterator(val values: DoubleArray, val begin: Int, val size: Int) : DoubleIterator() {
+        override fun nextDouble(): Double {
             val p = begin + ptr++
             return values[p]
         }
 
-        override fun nextIndex(): Int {
-            return ptr
-        }
-
-        override fun previous(): Double {
-            val p = begin + --ptr
-            return values[p]
-        }
-
-        override fun previousIndex(): Int {
-            return ptr - 1
+        var ptr = 0
+        override fun hasNext(): Boolean {
+            return ptr < size
         }
     }
 
-    override fun toString(): String {
-        return this.toList().toString()
-    }
+//    override fun toString(): String {
+//        return this.toList().toString()
+//    }
 
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
@@ -128,7 +132,7 @@ data class DoubleSlice(val values: DoubleArray, val begin: Int, override val siz
             return false
         }
         for (i in 0 until size) {
-            if (values[i] != other[i]) {
+            if (values[i] != other.get(i)) {
                 return false
             }
         }

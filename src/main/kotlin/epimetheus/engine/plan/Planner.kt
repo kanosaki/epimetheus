@@ -98,7 +98,7 @@ data class RPoints(val timestamps: LongSlice, val values: DoubleSlice) : Runtime
     }
 
     fun isEmpty(): Boolean {
-        return values.isEmpty() || values.all { Mat.isStale(it) }
+        return values.isEmpty() || values.isAllStale()
     }
 
     companion object {
@@ -216,7 +216,7 @@ data class RPointMatrix(override val metrics: List<Metric>, val series: List<RPo
         val sels = mutableListOf<RPoints>()
         for (i in 0 until metrics.size) {
             val ss = series[i]
-            if (!ss.values.isEmpty() && ss.values.all { !Mat.isStale(it) }) {
+            if (!ss.values.isEmpty() && !ss.values.isAllStale()) {
                 mets.add(metrics[i])
                 sels.add(series[i])
             }

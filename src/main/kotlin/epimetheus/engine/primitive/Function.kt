@@ -126,7 +126,7 @@ interface Function {
                 MapFunction("avg_over_time") { ctx, args ->
                     val m = args[0] as RRangeMatrix
                     m.unify { _, _, vs ->
-                        vs.average()
+                        vs.sum() / vs.size
                     }
                 },
                 MapFunction("ceil") { _, args ->
