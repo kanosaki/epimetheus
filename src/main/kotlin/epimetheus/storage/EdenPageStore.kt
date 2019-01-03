@@ -16,8 +16,6 @@ import java.util.*
 
 data class EdenPageKey(@AffinityKeyMapped val metricID: Long, val timestamp: Long)
 
-data class EdenPage(val values: DoubleArray, val timestamps: LongArray)
-
 /**
  * FreshStorage is write intensive area. Affinity is defined by "instance" (in prometheus term)
  * to achieve better scalability (though it assumes even scrape_interval distribution.)
@@ -45,12 +43,11 @@ class EdenPageStore(val ignite: Ignite, val windowSize: Long = 5 * 60 * 1000) : 
             if (entry.value == null) {
                 entry.value = EdenPage(sample.values, sample.timestamps)
             } else {
-                val v = entry.value
-                val newVals = Arrays.copyOf(v.values, v.values.size + sample.values.size)
-                System.arraycopy(sample.values, 0, newVals, v.values.size, sample.values.size)
-                val newTimestamps = Arrays.copyOf(v.timestamps, v.timestamps.size + sample.timestamps.size)
-                System.arraycopy(sample.timestamps, 0, newTimestamps, v.timestamps.size, sample.timestamps.size)
-                entry.value = EdenPage(newVals, newTimestamps) // renew instance to take effect
+                val newpage = EdenPage(entry.value.values, entry.value.timestamps) // renew instance to take effect
+                for (i in 0 until sample.values.size) {
+                    newpage.dirtyWrite(sample.timestamps[i], sample.values[i])
+                }
+                entry.value = newpage
             }
             return@from null
         })
