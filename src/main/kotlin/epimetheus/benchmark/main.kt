@@ -2,14 +2,15 @@ package epimetheus.benchmark
 
 import epimetheus.engine.Engine
 import epimetheus.model.TimeFrames
-import epimetheus.pkg.textparse.ScrapedSample
+import epimetheus.storage.Gateway
 import epimetheus.storage.IgniteGateway
 import org.apache.ignite.Ignition
 import org.apache.ignite.configuration.IgniteConfiguration
+import tech.tablesaw.api.DoubleColumn
+import tech.tablesaw.api.StringColumn
+import tech.tablesaw.api.Table
 import java.time.Duration
 import java.time.temporal.ChronoUnit
-import java.util.concurrent.atomic.AtomicLong
-import kotlin.streams.asStream
 
 fun tsDays(n: Int): Long {
     return Duration.of(n.toLong(), ChronoUnit.DAYS).toMillis()
@@ -19,24 +20,70 @@ fun tsHours(n: Int): Long {
     return Duration.of(n.toLong(), ChronoUnit.HOURS).toMillis()
 }
 
-inline fun measureTime(name: String, fn: () -> Unit) {
-    val warmupCount = 10
-    for (i in 0 until warmupCount) {
-        fn()
-    }
-    val stableNano = 10L * 1000 * 1000 * 1000
-    val stableCtr = 100
-    var measured = 0L
-    val history = mutableListOf<Long>()
+fun tsMinute(n: Int): Long {
+    return Duration.of(n.toLong(), ChronoUnit.MINUTES).toMillis()
+}
 
-    while (measured < stableNano || history.size < stableCtr) {
-        val start = System.nanoTime()
-        fn()
-        val elapsed = System.nanoTime() - start
-        history += elapsed
-        measured += elapsed
+abstract class Workload(val name: String) {
+    abstract fun prepare(gateway: Gateway)
+    abstract fun run(engine: Engine): List<BenchmarkResult>
+}
+
+data class Measurement(val beginTs: Long, val durationNano: Long)
+
+data class BenchmarkResult(val name: String, val warmups: List<Measurement>, val results: List<Measurement>) {
+    val latencies = results.map { it.durationNano }.sorted()
+
+    fun count(): Int {
+        return results.size
     }
-    println("=== $name avg:${history.average() / 1000 / 1000}ms max:${history.max()!! / 1000 / 1000}ms min:${history.min()!! / 1000 / 1000}ms")
+
+    fun latencySum(): Double {
+        return latencies.sum().toDouble() / 1000 / 1000
+    }
+
+    fun latencyPercentileMs(pct: Double): Double {
+        assert(pct in 0.0..1.0)
+        val idx = (latencies.size * pct).toInt()
+        return if (idx == latencies.size) {
+            latencies[idx - 1].toDouble() / 1000 / 1000
+        } else {
+            latencies[idx].toDouble() / 1000 / 1000
+        }
+    }
+}
+
+inline fun measure(fn: () -> Unit): Measurement {
+    val beginTs = System.currentTimeMillis()
+    val beginTime = System.nanoTime()
+    fn()
+    val elapsed = System.nanoTime() - beginTime
+    return Measurement(beginTs, elapsed)
+}
+
+inline fun benchmark(name: String, fn: () -> Unit): BenchmarkResult {
+    println("Benchmark $name")
+    val warmupCount = 10
+    val warmups = mutableListOf<Measurement>()
+    for (i in 0 until warmupCount) {
+        warmups += measure {
+            fn()
+        }
+    }
+    val measureTimeThresh = 10L * 1000 * 1000 * 1000
+    val measureCountThresh = 1000
+    var measuredTime = 0L
+    val results = mutableListOf<Measurement>()
+
+
+    while (measuredTime < measureTimeThresh && results.size < measureCountThresh) {
+        val m = measure {
+            fn()
+        }
+        measuredTime += m.durationNano
+        results += m
+    }
+    return BenchmarkResult(name, warmups, results)
 }
 
 fun main(args: Array<String>) {
@@ -49,47 +96,38 @@ fun main(args: Array<String>) {
         igniteInstanceName = "client"
         isClientMode = true
     })
+    val workloads = listOf(
+            Longterm(),
+            Wide()
+    )
     val gateway = IgniteGateway(client)
     val engine = Engine(gateway, null)
+
     val loadStart = System.currentTimeMillis()
-    val ctr = AtomicLong(0)
-    // 345600 points per metric
-    (0 until tsDays(40) step 15 * 1000)
-            .asSequence()
-            .asStream()
-            .parallel().forEach { t ->
-                gateway.pushScraped(t, listOf(
-                        ScrapedSample.create("a", 1.0, "x" to "1", "y" to "1"),
-                        ScrapedSample.create("a", 1.0, "x" to "1", "y" to "2"),
-                        ScrapedSample.create("a", 1.0, "x" to "2", "y" to "1"),
-                        ScrapedSample.create("a", 1.0, "x" to "2", "y" to "2"),
-                        ScrapedSample.create("b", 1.0, "x" to "1", "y" to "1"),
-                        ScrapedSample.create("b", 1.0, "x" to "1", "y" to "2"),
-                        ScrapedSample.create("b", 1.0, "x" to "2", "y" to "1"),
-                        ScrapedSample.create("b", 1.0, "x" to "2", "y" to "2")
-                ), false)
-                ctr.addAndGet(8)
-            }
+
+    for (w in workloads) {
+        println("Prepare ${w.name}")
+        w.prepare(gateway)
+    }
+
     gateway.pushScraped(0, listOf(), true)
-    println("Load ${ctr.get()}items took ${System.currentTimeMillis() - loadStart}ms")
+    println("Prepare took ${System.currentTimeMillis() - loadStart}ms")
 
-    val tf = TimeFrames(tsDays(10), tsDays(40), tsHours(6))
 
-    val queries = listOf(
-            "avg_over_time(a[1d])",
-            "max_over_time(a[1d])",
-            "histogram_quantile(0.5, a)",
-            "histogram_quantile(0.5, rate(a[1h]))",
-            "max(rate(a[1d]))",
-            "sum(a)",
-            "sum by (a) (a)",
-            "a + b"
-    )
+    for (w in workloads) {
+        println("Run ${w.name}")
+        val results = w.run(engine)
 
-    for (query in queries) {
-        measureTime("exec($query)") {
-            engine.exec(query, tf)
-        }
+        val table = Table.create(w.name,
+                StringColumn.create("name", results.map { it.name }),
+                DoubleColumn.create("count", results.map { it.count() }),
+                DoubleColumn.create("sum", results.map { it.latencySum() }),
+                DoubleColumn.create("50p", results.map { it.latencyPercentileMs(.05) }),
+                DoubleColumn.create("90p", results.map { it.latencyPercentileMs(.9) }),
+                DoubleColumn.create("99p", results.map { it.latencyPercentileMs(.99) }),
+                DoubleColumn.create("max", results.map { it.latencyPercentileMs(1.0) })
+        ).sortDescendingOn("99p")
+        println(table.printAll())
     }
 
     servers.forEach { it.close() }
