@@ -1,6 +1,7 @@
 package epimetheus.benchmark
 
 import epimetheus.engine.Engine
+import epimetheus.engine.PhaseTracer
 import epimetheus.model.TimeFrames
 import epimetheus.pkg.textparse.ScrapedSample
 import epimetheus.storage.Gateway
@@ -30,7 +31,11 @@ class Wide : Workload("wide") {
 
         for (query in wideQueries) {
             val br = benchmark("exec-wide:$query") {
-                engine.exec(query, wideTimeFrame)
+                val tracer = PhaseTracer()
+                engine.execWithTracer(query, wideTimeFrame, tracer)
+                it["parse"] = (tracer.phases["plan"]!! - tracer.phases["parse"]!!).toDouble() / 1000 / 1000
+                it["plan"] = (tracer.phases["exec"]!! - tracer.phases["plan"]!!).toDouble() / 1000 / 1000
+                it["exec"] = (tracer.endTime()!! - tracer.phases["exec"]!!).toDouble() / 1000 / 1000
             }
             results += br
         }

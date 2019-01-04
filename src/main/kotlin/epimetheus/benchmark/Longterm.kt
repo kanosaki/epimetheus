@@ -1,12 +1,13 @@
 package epimetheus.benchmark
 
 import epimetheus.engine.Engine
+import epimetheus.engine.PhaseTracer
 import epimetheus.model.TimeFrames
 import epimetheus.pkg.textparse.ScrapedSample
 import epimetheus.storage.Gateway
 
 
-class Longterm: Workload("long") {
+class Longterm : Workload("long") {
     override fun prepare(gateway: Gateway) {
         // 345600 points per metric
         for (t in 0 until tsDays(30) step 15 * 1000) {
@@ -43,7 +44,11 @@ class Longterm: Workload("long") {
 
         for (query in longTermQueries) {
             val br = benchmark("exec-long:$query") {
-                engine.exec(query, longTermTimeFrame)
+                val tracer = PhaseTracer()
+                engine.execWithTracer(query, longTermTimeFrame, tracer)
+                it["parse"] = (tracer.phases["plan"]!! - tracer.phases["parse"]!!).toDouble() / 1000 / 1000
+                it["plan"] = (tracer.phases["exec"]!! - tracer.phases["plan"]!!).toDouble() / 1000 / 1000
+                it["exec"] = (tracer.endTime()!! - tracer.phases["exec"]!!).toDouble() / 1000 / 1000
             }
             results += br
         }

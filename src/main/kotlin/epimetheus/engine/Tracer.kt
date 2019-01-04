@@ -14,6 +14,10 @@ abstract class Tracer {
 
     }
 
+    open fun onPhase(name: String) {
+
+    }
+
     open fun printTrace(out: PrintStream = System.out, indent: Int = 2): String {
         return "elapsed: ${this.elapsedMs()}"
     }
@@ -39,6 +43,19 @@ abstract class Tracer {
         } else {
             null
         }
+    }
+}
+
+class PhaseTracer : Tracer() {
+    val phases = mutableMapOf<String, Long>()
+    override fun onPhase(name: String) {
+        synchronized(phases) {
+            phases[name] = System.nanoTime()
+        }
+    }
+
+    fun endTime(): Long? {
+        return end
     }
 }
 

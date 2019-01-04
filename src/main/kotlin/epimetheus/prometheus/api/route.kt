@@ -75,7 +75,7 @@ class APIHandlerFactory(val vertx: Vertx, val gateway: Gateway) {
                         val step = queryDuration(ctx, "step")
                         val r = ctx.response()
                         try {
-                            val interp = Engine(gateway, 500)
+                            val interp = Engine(gateway, null)
                             val value = interp.exec(query, TimeFrames(start.toEpochMilli(), end.toEpochMilli(), step.toMillis()))
                             val result = toResult(value)
                             r.end(Json.encode(Response("success", result, null, null)))
