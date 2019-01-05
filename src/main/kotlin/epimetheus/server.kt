@@ -2,7 +2,6 @@ package epimetheus
 
 import epimetheus.ServiceName.Prometheus.API_SERVER
 import epimetheus.ServiceName.Prometheus.SCRAPE_SERVICE
-import epimetheus.prometheus.IgniteAPI
 import epimetheus.prometheus.configfile.ConfigFile
 import epimetheus.prometheus.configfile.Parser
 import epimetheus.prometheus.scrape.ScrapeService
@@ -31,7 +30,7 @@ class EpimetheusServer(igniteConfig: IgniteConfiguration) : AutoCloseable {
         ignite.services(apiNodes).deploy(
                 ServiceConfiguration().apply {
                     name = API_SERVER
-                    service = IgniteAPI()
+                    service = APIService()
                     maxPerNodeCount = 1
                 }
         )

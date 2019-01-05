@@ -1,8 +1,8 @@
 package epimetheus.e2e
 
 import epimetheus.pkg.textparse.ScrapedSample
-import epimetheus.prometheus.api.APIHandlerFactory
-import epimetheus.prometheus.api.APIVerticle
+import epimetheus.prometheus.api.PrometheusAPIRoutes
+import epimetheus.api.APIVerticle
 import epimetheus.prometheus.configfile.APIServerConfig
 import epimetheus.storage.MockGateway
 import io.vertx.core.Vertx
@@ -37,9 +37,9 @@ class BasicE2ETests {
                 ScrapedSample.create("baz", 7.0, "a" to "1"),
                 ScrapedSample.create("baz", 8.0, "b" to "1")
         ))
-        val handlerFactory = APIHandlerFactory(vertx, gateway)
+        val handlerFactory = PrometheusAPIRoutes(vertx, gateway)
         vertx.deployVerticle(
-                APIVerticle(handlerFactory, APIServerConfig(port, workers)),
+                APIVerticle(listOf(handlerFactory), APIServerConfig(port, workers)),
                 context.succeeding {
                     context.completeNow()
                 })

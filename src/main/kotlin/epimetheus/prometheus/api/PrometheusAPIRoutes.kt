@@ -1,5 +1,6 @@
 package epimetheus.prometheus.api
 
+import epimetheus.api.RouteConfigurator
 import epimetheus.engine.Engine
 import epimetheus.engine.Interpreter
 import epimetheus.model.LabelMatchType
@@ -25,13 +26,10 @@ import org.apache.parquet.hadoop.util.HadoopInputFile
 import java.io.File
 
 
-class APIHandlerFactory(val vertx: Vertx, val gateway: Gateway) {
-    fun configure(router: Router) {
+class PrometheusAPIRoutes(val vertx: Vertx, val gateway: Gateway): RouteConfigurator {
+    override fun configure(router: Router) {
         router.mountSubRouter("/api/v1", prometheusV1RestApi())
         router.mountSubRouter("/api/v1", epimetheusDebuggingApi())
-        router.exceptionHandler { ev ->
-            println("${ev.message}")
-        }
     }
 
     // NOTE: https://prometheus.io/docs/prometheus/latest/querying/api/
@@ -52,7 +50,7 @@ class APIHandlerFactory(val vertx: Vertx, val gateway: Gateway) {
     // POST /api/v1/admin/tsdb/delete_series
     // POST /api/v1/admin/tsdb/clean_tombstones
 
-    fun prometheusV1RestApi(): Router {
+    private fun prometheusV1RestApi(): Router {
         return Router.router(vertx).apply {
             route("/query")
                     .handler { ctx ->
@@ -107,7 +105,7 @@ class APIHandlerFactory(val vertx: Vertx, val gateway: Gateway) {
         }
     }
 
-    fun epimetheusDebuggingApi(): Router {
+    private fun epimetheusDebuggingApi(): Router {
         return Router.router(vertx).apply {
             route(HttpMethod.POST, "/scrape_data")
                     .handler(BodyHandler.create())

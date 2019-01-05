@@ -73,6 +73,9 @@ object Util {
                 Result("string", v.value)
             }
             is RPointMatrix -> {
+                if (v.series.isEmpty()) {
+                    return Result("matrix", listOf<SeriesResult>())
+                }
                 val resultType = if (v.series[0].timestamps.size == 1) {
                     "vector"
                 } else {

@@ -132,5 +132,5 @@ data class StaticConfig(@JsonProperty("targets") val targets: List<String>, @Jso
     }
 }
 
-data class APIServerConfig(val port: Int, val workers: Int)
+data class APIServerConfig(val port: Int, val workers: Int, val corsOrigin: String = "*")
 

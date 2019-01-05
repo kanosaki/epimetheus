@@ -4,14 +4,23 @@
        xsi:schemaLocation="http://www.springframework.org/schema/beans
                             http://www.springframework.org/schema/beans/spring-beans.xsd">
     <bean id="grid.cfg" class="org.apache.ignite.configuration.IgniteConfiguration">
+        <property name="dataStorageConfiguration">
+            <bean class="org.apache.ignite.configuration.DataStorageConfiguration">
+                <property name="defaultDataRegionConfiguration">
+                    <bean class="org.apache.ignite.configuration.DataRegionConfiguration">
+                        <property name="metricsEnabled" value="true"/>
+                        <property name="name" value="default"/>
+                        <property name="maxSize" value="#{4L * 1024 * 1024 * 1024}"/>
+                    </bean>
+                </property>
+            </bean>
+        </property>
         <property name="gridLogger">
             <bean class="org.apache.ignite.logger.slf4j.Slf4jLogger"/>
         </property>
-        <property name="activeOnStart" value="true" />
-        <property name="autoActivationEnabled" value="true" />
         <property name="communicationSpi">
             <bean class="org.apache.ignite.spi.communication.tcp.TcpCommunicationSpi">
-                <property name="localAddress" value="0.0.0.0" />
+                <property name="localAddress" value="0.0.0.0"/>
             </bean>
         </property>
     </bean>

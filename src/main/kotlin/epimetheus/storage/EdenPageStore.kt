@@ -25,6 +25,7 @@ class EdenPageStore(val ignite: Ignite, val windowSize: Long = 5 * 60 * 1000) : 
     private val cache = ignite.getOrCreateCache(CacheConfiguration<EdenPageKey, EdenPage>().apply {
         name = FRESH_SAMPLES
         backups = 1
+        isStatisticsEnabled = true
 //        defaultLockTimeout = 1000
         //setIndexedTypes(EdenPageKey::class.java, EdenPage::class.java)
     })
