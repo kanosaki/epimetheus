@@ -3,6 +3,7 @@ package epimetheus.storage
 import org.apache.ignite.Ignition
 import org.apache.ignite.binary.BinaryObject
 import org.apache.ignite.configuration.IgniteConfiguration
+import org.junit.jupiter.api.Assertions
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 import tech.tablesaw.api.DoubleColumn
@@ -15,6 +16,51 @@ class EdenPageBinaryTest {
         val f = bo.javaClass.getDeclaredField("arr")
         f.isAccessible = true
         return f.get(bo) as ByteArray
+    }
+
+    @Tag("slow")
+    @Test
+    fun pointAppendingRandomDataTest() {
+        val ignite = Ignition.getOrStart(IgniteConfiguration())
+        val rand = Random()
+        val timestamps = (0 until 100).map { it * 1000L * 15 + rand.nextInt(100) - 50 }
+        val values = (0 until 100).map { rand.nextGaussian() * 100.0 - 50 }
+        for (cutSize in 1 until 10) {
+            val page = EdenPage(doubleArrayOf(), longArrayOf())
+            for (i in 0 until cutSize) {
+                page.dirtyWrite(timestamps[i], values[i])
+            }
+
+            val bo = ignite.binary().toBinary<BinaryObject>(page)
+            val result = bo.deserialize<EdenPage>()
+            Assertions.assertArrayEquals(values.take(cutSize).toDoubleArray(), result.values)
+            Assertions.assertArrayEquals(timestamps.take(cutSize).toLongArray(), result.timestamps)
+        }
+
+        for (cutSize in 1 until 10) {
+            val page = EdenPage(values.take(cutSize - 1).toDoubleArray(), timestamps.take(cutSize - 1).toLongArray())
+            page.dirtyWrite(timestamps[cutSize - 1], values[cutSize - 1])
+            val bo = ignite.binary().toBinary<BinaryObject>(page)
+            val result = bo.deserialize<EdenPage>()
+            Assertions.assertArrayEquals(values.take(cutSize).toDoubleArray(), result.values)
+            Assertions.assertArrayEquals(timestamps.take(cutSize).toLongArray(), result.timestamps)
+        }
+    }
+
+    @Tag("slow")
+    @Test
+    fun compressionDecompressionTest() {
+        val ignite = Ignition.getOrStart(IgniteConfiguration())
+        val rand = Random()
+        for (pointsSize in 0 until 100) {
+            val timestamps = (0 until pointsSize).map { it * 1000L * 15 + rand.nextInt(100) - 50 }
+            val values = (0 until pointsSize).map { rand.nextGaussian() * 100.0 - 50 }
+            val page = EdenPage(values.toDoubleArray(), timestamps.toLongArray())
+            val bo = ignite.binary().toBinary<BinaryObject>(page)
+            val result = bo.deserialize<EdenPage>()
+            Assertions.assertArrayEquals(page.values, result.values)
+            Assertions.assertArrayEquals(page.timestamps, result.timestamps)
+        }
     }
 
     @Tag("slow")

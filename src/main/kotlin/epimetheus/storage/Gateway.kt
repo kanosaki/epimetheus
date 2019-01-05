@@ -57,7 +57,6 @@ class IgniteGateway(val ignite: Ignite) : Gateway, AutoCloseable {
 
     override fun fetchRange(metrics: List<Metric>, frames: TimeFrames, range: Long, offset: Long): RRangeMatrix {
         val vals = metrics
-                .parallelStream()
                 .map { met ->
                     RRanges(eden.fetchRange(met, frames, range, offset))
                 }
@@ -66,7 +65,7 @@ class IgniteGateway(val ignite: Ignite) : Gateway, AutoCloseable {
 
     override fun collectRange(query: MetricMatcher, frames: TimeFrames, range: Long, offset: Long): RangeGridMat {
         val mets = metricRegistry.lookupMetrics(query)
-        val vals = mets.parallelStream().map {
+        val vals = mets.map {
             eden.collectRange(it, frames, range, offset)
         }
         return RangeGridMat(mets, frames, range, vals.toList(), offset)

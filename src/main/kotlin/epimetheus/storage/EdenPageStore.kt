@@ -226,7 +226,7 @@ class EdenPageStore(val ignite: Ignite, val windowSize: Long = 5 * 60 * 1000) : 
             }
         }
         val entriesBuffer = Array<EdenPage?>(collectingKeys.size) { null }
-        collectingKeys.withIndex().toList().parallelStream().forEach {
+        collectingKeys.withIndex().forEach {
             entriesBuffer[it.index] = cache[it.value]
         }
         return frames.map { originalTs ->

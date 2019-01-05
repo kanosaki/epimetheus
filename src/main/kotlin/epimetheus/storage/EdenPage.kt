@@ -5,13 +5,13 @@ import fi.iki.yak.ts.compression.gorilla.predictors.DifferentialFCM
 import org.apache.ignite.binary.BinaryReader
 import org.apache.ignite.binary.BinaryWriter
 import org.apache.ignite.binary.Binarylizable
-import java.lang.RuntimeException
 
 class EdenPage(var values: DoubleArray, var timestamps: LongArray) : Binarylizable {
     object FieldKeys {
         val DATA = "data"
         val SIZE = "size"
     }
+
     override fun readBinary(reader: BinaryReader?) {
         val size = reader!!.readShort(FieldKeys.SIZE).toInt()
         val ba = reader.readLongArray(FieldKeys.DATA) ?: return // empty data
@@ -19,7 +19,8 @@ class EdenPage(var values: DoubleArray, var timestamps: LongArray) : Binarylizab
         values = DoubleArray(size)
         timestamps = LongArray(size)
         for (i in 0 until size) {
-            val pair = decompressor.readPair() ?: throw RuntimeException("size is inconsistent: given = $size but null at $i")
+            val pair = decompressor.readPair()
+                    ?: throw RuntimeException("size is inconsistent: given = $size but null at $i")
             values[i] = pair.doubleValue
             timestamps[i] = pair.timestamp
         }
@@ -35,7 +36,7 @@ class EdenPage(var values: DoubleArray, var timestamps: LongArray) : Binarylizab
         val firstTs = if (timestamps.isNotEmpty()) timestamps[0] else dirtryPairs[0].first
 
         val out = LongArrayOutput(values.size + dirtryPairs.size)
-        val compressor = GorillaCompressor(firstTs, out, DifferentialFCM(32))
+        val compressor = GorillaCompressor(firstTs, out)
         for (i in 0 until values.size) {
             compressor.addValue(timestamps[i], values[i])
         }

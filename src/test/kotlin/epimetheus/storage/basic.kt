@@ -7,6 +7,7 @@ import epimetheus.model.TestUtils.assertRangeMatEquals
 import epimetheus.pkg.textparse.ScrapedSample
 import org.apache.ignite.Ignite
 import org.apache.ignite.Ignition
+import org.apache.ignite.configuration.IgniteConfiguration
 import org.junit.jupiter.api.*
 import kotlin.test.assertEquals
 
@@ -17,7 +18,7 @@ class TestStorageIgnite {
     lateinit var ignite: Ignite
     @BeforeAll
     fun setUp() {
-        ignite = Ignition.start("conf/dev-config.xml")
+        ignite = Ignition.getOrStart(IgniteConfiguration())
     }
 
     @BeforeEach
