@@ -60,10 +60,14 @@ class AggregatorPlanner(val binding: Map<String, Aggregator>) {
 
         val group = ast.groups
         return if (group == null) {
-            ColumnMapAggregatorNode(FixedMetric(listOf(Metric.empty)), param as FixedInstantNode, ast.agg.name, null)
+            if (mp.metrics.isEmpty()) {
+                ColumnMapAggregatorNode(FixedMetric(listOf()), param as FixedInstantNode, ast.agg.name, null)
+            } else {
+                ColumnMapAggregatorNode(FixedMetric(listOf(Metric.empty)), param as FixedInstantNode, ast.agg.name, null)
+            }
         } else {
             val metAndGrouping = computeMetricsAndGrouping(mp.metrics, group)
-            return ColumnMapAggregatorNode(FixedMetric(metAndGrouping.first), param, ast.agg.name, metAndGrouping.second)
+            ColumnMapAggregatorNode(FixedMetric(metAndGrouping.first), param, ast.agg.name, metAndGrouping.second)
         }
     }
 }

@@ -8,6 +8,7 @@ import epimetheus.engine.primitive.NumericBinOp
 import epimetheus.engine.primitive.SetBinOp
 import epimetheus.pkg.promql.PromQLException
 import epimetheus.pkg.promql.VectorMatching
+import java.lang.RuntimeException
 
 data class BinOpArithMatMatNode(override val metPlan: FixedMetric, val opMapping: List<IntArray>, val lhs: InstantNode, val rhs: InstantNode, val op: NumericBinOp) : FixedInstantNode {
     override val affinity: NodeAffinity = NodeAffinity.Splitted
@@ -20,6 +21,9 @@ data class BinOpArithMatMatNode(override val metPlan: FixedMetric, val opMapping
                 val series = opMapping.map { lrIdx ->
                     val lhsIndex = lrIdx[0]
                     val rhsIndex = lrIdx[1]
+                    if (lv.series.size <= lhsIndex || rv.series.size <= rhsIndex) {
+                        throw RuntimeException("inconsistent state: mismatch between plan and data")
+                    }
                     val lPoints = lv.series[lhsIndex]
                     val rPoints = rv.series[rhsIndex]
                     lPoints.mapValues { l, _, i ->

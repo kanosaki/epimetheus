@@ -46,7 +46,7 @@ class VariadicAggregatorNode(val params: List<PlanNode>, val fnName: String, val
         val args = params.map { it.evaluate(ec, eng) }
         return when (agg) {
             is VariadicAggregator -> {
-                agg.fn(ec, args, group)
+                agg.eval(ec, args, group)
             }
             else -> TODO("couldn't evaluate mapping aggregator inner VariadicAggregatorNode")
         }

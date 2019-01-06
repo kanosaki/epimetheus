@@ -85,7 +85,8 @@ object Util {
                 v.series.forEachIndexed { i, s ->
                     val values = mutableListOf<List<Any>>()
                     for (j in 0 until s.timestamps.size) {
-                        values += listOf(s.timestamps[j]/1e3, s.values[j].toString())
+                        // use timestamp from frame
+                        values += listOf(v.frames[j]/1e3, s.values[j].toString())
                     }
                     series += SeriesResult(v.metrics[i].toSortedMap(), values)
                 }

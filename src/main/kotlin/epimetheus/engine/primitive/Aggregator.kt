@@ -45,7 +45,9 @@ interface Aggregator {
                     DoubleSlice.init(values[0].size) {
                         var ctr = 0
                         for (i in 0 until values.size) {
-                            ctr++
+                            if (!Mat.isStale(values[i][it])){
+                                ctr++
+                            }
                         }
                         ctr.toDouble()
                     }
