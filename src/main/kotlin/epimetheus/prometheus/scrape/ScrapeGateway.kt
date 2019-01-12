@@ -7,6 +7,7 @@ import org.apache.ignite.Ignition
 import org.apache.ignite.cache.CacheInterceptorAdapter
 import org.apache.ignite.cache.CachePeekMode
 import org.apache.ignite.configuration.CacheConfiguration
+import org.apache.ignite.resources.IgniteInstanceResource
 import java.time.LocalDateTime
 import javax.cache.Cache
 
@@ -55,12 +56,15 @@ class StatusCacheInterceptor : CacheInterceptorAdapter<ScrapeTargetKey, ScrapeSc
 }
 
 class TargetCacheInterceptor : CacheInterceptorAdapter<ScrapeTargetKey, ScrapeTarget>() {
+    @IgniteInstanceResource
+    @Transient
+    private lateinit var ignite: Ignite
+
     @Transient
     private var statuses: IgniteCache<ScrapeTargetKey, ScrapeSchedule>? = null
 
     private fun checkStatusCache() {
         if (statuses == null) {
-            val ignite = Ignition.ignite()
             statuses = ignite.cache(CacheName.Prometheus.SCRAPE_STATUSES)
         }
     }
