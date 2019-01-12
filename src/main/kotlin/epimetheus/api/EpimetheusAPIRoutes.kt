@@ -8,12 +8,12 @@ import org.apache.ignite.Ignite
 
 class EpimetheusAPIRoutes(val vertx: Vertx, val ignite: Ignite) : RouteConfigurator {
     override fun configure(router: Router) {
-        router.mountSubRouter("/epi/v1", epimetheusV1RestAPI())
+        router.mountSubRouter("/epi/v1/cluster", clusterApis())
     }
 
-    fun epimetheusV1RestAPI(): Router {
+    private fun clusterApis(): Router {
         return Router.router(vertx).apply {
-            route("/cluster")
+            route("/")
                     .handler { ctx ->
                         val r = ctx.response()
                         val nodes = ignite.cluster().nodes().map { NodeInfo(it, false) }
@@ -25,19 +25,19 @@ class EpimetheusAPIRoutes(val vertx: Vertx, val ignite: Ignite) : RouteConfigura
                         )
                         r.end(Json.encode(info))
                     }
-            route("/cluster/nodes")
+            route("/nodes")
                     .handler { ctx ->
                         val r = ctx.response()
                         val nodes = ignite.cluster().nodes().map { NodeInfo(it, true) }
                         r.end(Json.encode(nodes))
                     }
-            route("/cluster/cache/:name")
+            route("/cache/:name")
                     .handler { ctx ->
                         val r = ctx.response()
                         val c = ignite.cache<Any, Any>(ctx.pathParam("name"))
                         r.end(Json.encode(c.metrics()))
                     }
-            route("/cluster/storage")
+            route("/storage")
                     .handler { ctx ->
                         val r = ctx.response()
                         r.end(Json.encode(StorageInfo(ignite.dataStorageMetrics(), ignite.dataRegionMetrics())))
