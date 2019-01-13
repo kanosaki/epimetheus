@@ -24,6 +24,8 @@
 
 <script>
   import {queryRange} from "../../../lib/api/prometheus/query";
+  const defaultQuery = 'rate(node_cpu[1m])'
+  const queryCookieKey = 'query-saved'
 
   const chartOptions = {
     title: {
@@ -52,18 +54,19 @@
   export default {
     data() {
       return {
-        query: "node_cpu",
+        query: this.$cookies.get(queryCookieKey) || defaultQuery,
         datum: {}
       }
     },
-    async asyncData() {
-      const result = await queryRange("node_cpu", 60 * 60)
+    async asyncData({ app }) {
+      const result = await queryRange(app.$cookies.get(queryCookieKey) || defaultQuery, 60 * 60)
       return {
         datum: result.renderEchartsOptions(chartOptions)
       }
     },
     methods: {
       async onQueryUpdated() {
+        this.$cookies.set('query-saved', this.query)
         const result = await queryRange(this.query, 60 * 60)
         this.datum = result.renderEchartsOptions(chartOptions)
       }
