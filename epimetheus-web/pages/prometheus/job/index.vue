@@ -14,8 +14,8 @@
 </template>
 
 <script>
-import { jobStatus } from '../../../lib/api/job'
 import moment from 'moment'
+import { jobStatus } from '../../../lib/api/job'
 
 export default {
   filters: {

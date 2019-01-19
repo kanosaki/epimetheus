@@ -21,6 +21,7 @@
 
 <script>
 import { queryRange } from '../../../lib/api/prometheus/query'
+
 const defaultQuery = 'rate(node_cpu[1m])'
 const queryCookieKey = 'query-saved'
 

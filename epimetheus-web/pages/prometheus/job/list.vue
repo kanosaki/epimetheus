@@ -4,12 +4,19 @@
       <v-toolbar-title>Scrape jobs</v-toolbar-title>
       <v-spacer />
       <v-dialog max-width="500px">
-        <v-btn slot="activator" color="primary" dark class="mb-2">
+        <v-btn
+          slot="activator"
+          color="primary"
+          dark
+          class="mb-2"
+        >
           New Item
         </v-btn>
         <v-card>
           <v-card-title>
-            <span class="headline">Create new job</span>
+            <span class="headline">
+              Create new job
+            </span>
           </v-card-title>
 
           <v-card-text>
@@ -27,8 +34,12 @@
 
           <v-card-actions>
             <v-spacer />
-            <v-btn color="blue darken-1" flat @click="close"> Cancel </v-btn>
-            <v-btn color="blue darken-1" flat @click="save"> Save </v-btn>
+            <v-btn color="blue darken-1" flat @click="close">
+              Cancel
+            </v-btn>
+            <v-btn color="blue darken-1" flat @click="save">
+              Save
+            </v-btn>
           </v-card-actions>
         </v-card>
       </v-dialog>
@@ -47,7 +58,7 @@
       </template>
       <template slot="expand" slot-scope="props">
         <v-card flat>
-          <v-card-text> Hello {{ props.item.config.job_name }} </v-card-text>
+          <v-card-text> Hello {{ props.item.config.job_name }}</v-card-text>
         </v-card>
       </template>
     </v-data-table>

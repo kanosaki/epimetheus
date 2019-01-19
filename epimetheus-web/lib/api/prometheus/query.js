@@ -11,10 +11,10 @@ export async function queryRange(
   stepSecs,
 ) {
   if (!query) {
-    throw 'query required'
+    throw new Error('query required')
   }
   if (!durationSeconds) {
-    throw 'duration seconds required'
+    throw new Error('duration seconds required')
   }
   if (!latestTimestamp) {
     latestTimestamp = new Date().getTime() / 1000.0
@@ -43,27 +43,25 @@ export class QueryRangeResult {
   }
 
   static metricStringify(dic) {
-    const name = dic['__name__'] || ''
+    const name = dic.__name__ || ''
     const attrs = []
-    for (let prop in dic) {
+    for (const prop in dic) {
       if (!dic.hasOwnProperty(prop)) continue
       if (prop === '__name__') continue
       attrs.push(`${prop}="${dic[prop]}"`)
     }
     if (name === '') {
       return `{${attrs.join(',')}}`
+    } else if (attrs.length === 0) {
+      return name
     } else {
-      if (attrs.length === 0) {
-        return name
-      } else {
-        return `${name}{${attrs.join(',')}}`
-      }
+      return `${name}{${attrs.join(',')}}`
     }
   }
 
   renderEchartsOptions(base) {
     const series = []
-    let timestamps = null
+    const timestamps = null
     this.data.result.forEach(sel => {
       series.push({
         name: QueryRangeResult.metricStringify(sel.metric),
