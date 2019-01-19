@@ -1,5 +1,3 @@
 <template>
-  <div>
-    Scrape
-  </div>
+  <div>Scrape</div>
 </template>

@@ -4,7 +4,12 @@ export function stepSeconds(durationSeconds, expectedTimePoints) {
   return Math.floor(durationSeconds / expectedTimePoints)
 }
 
-export async function queryRange(query, durationSeconds, latestTimestamp, stepSecs) {
+export async function queryRange(
+  query,
+  durationSeconds,
+  latestTimestamp,
+  stepSecs,
+) {
   if (!query) {
     throw 'query required'
   }
@@ -23,7 +28,7 @@ export async function queryRange(query, durationSeconds, latestTimestamp, stepSe
       start: latestTimestamp - durationSeconds,
       end: latestTimestamp,
       step: stepSecs,
-    }
+    },
   })
   return new QueryRangeResult(resp.data)
 }
@@ -41,8 +46,8 @@ export class QueryRangeResult {
     const name = dic['__name__'] || ''
     const attrs = []
     for (let prop in dic) {
-      if (!dic.hasOwnProperty(prop)) continue;
-      if (prop === '__name__') continue;
+      if (!dic.hasOwnProperty(prop)) continue
+      if (prop === '__name__') continue
       attrs.push(`${prop}="${dic[prop]}"`)
     }
     if (name === '') {

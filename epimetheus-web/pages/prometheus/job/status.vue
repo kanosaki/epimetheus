@@ -1,5 +1,3 @@
 <template>
-  <div>
-    Jobs
-  </div>
+  <div>Jobs</div>
 </template>

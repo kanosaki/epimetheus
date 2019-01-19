@@ -10,6 +10,6 @@ Vue.use(Vuetify, {
     error: '#f44336',
     warning: '#ff9800',
     info: '#4caf50',
-    success: '#00bcd4'
-  }
+    success: '#00bcd4',
+  },
 })
