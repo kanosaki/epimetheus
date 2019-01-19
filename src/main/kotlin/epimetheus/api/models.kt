@@ -1,6 +1,6 @@
 package epimetheus.api
 
-import epimetheus.prometheus.scrape.ScrapeSchedule
+import epimetheus.prometheus.scrape.ScrapeStatus
 import epimetheus.prometheus.scrape.ScrapeTarget
 import epimetheus.prometheus.scrape.ScrapeTargetKey
 import org.apache.ignite.DataRegionMetrics
@@ -32,4 +32,4 @@ class NodeInfo(node: ClusterNode, withMetric: Boolean) : Serializable {
 
 class StorageInfo(val storageMetrics: DataStorageMetrics?, val dataRegionMetrics: Collection<DataRegionMetrics>): Serializable
 
-class ScrapeStatus(val key: ScrapeTargetKey, val target: ScrapeTarget, val schedule: ScrapeSchedule?): Serializable
+class ScrapeStatus(val key: ScrapeTargetKey, val target: ScrapeTarget, val status: ScrapeStatus?): Serializable

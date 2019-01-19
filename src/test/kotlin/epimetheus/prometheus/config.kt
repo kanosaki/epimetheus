@@ -40,7 +40,7 @@ class PrometheusConfigFileTest {
                                 mapOf("foo" to "bar", "hoge" to "fuga")
                         ))
                 )),
-                Global(Duration.ofSeconds(15))
+                PrometheusGlobalConfig(Duration.ofSeconds(15))
         ))
     }
 }

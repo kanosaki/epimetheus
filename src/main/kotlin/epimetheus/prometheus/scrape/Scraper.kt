@@ -6,8 +6,8 @@ import io.vertx.core.Handler
 import io.vertx.ext.web.client.WebClient
 import org.antlr.v4.runtime.CharStreams
 
-class Scraper(private val client: WebClient, private val target: ScrapeTarget) : Handler<Future<ScrapeResult>> {
-    override fun handle(event: Future<ScrapeResult>?) {
+class Scraper(private val client: WebClient, private val target: ScrapeTarget) : Handler<Future<ScrapeResponse>> {
+    override fun handle(event: Future<ScrapeResponse>?) {
         assert(event != null)
         val begin = System.nanoTime()
         val req = client.getAbs(target.url)
@@ -23,7 +23,7 @@ class Scraper(private val client: WebClient, private val target: ScrapeTarget) :
             val resp = ar.result()
             val s = resp.bodyAsString()
             val samples = ExporterParser.parse(CharStreams.fromString(s))
-            event?.complete(ScrapeResult(elapsed, samples))
+            event?.complete(ScrapeResponse(elapsed, samples))
         }
     }
 }

@@ -1,5 +1,6 @@
 package epimetheus
 
+import com.fasterxml.jackson.module.kotlin.registerKotlinModule
 import epimetheus.api.APIVerticle
 import epimetheus.api.EpimetheusAPIRoutes
 import epimetheus.api.RouteConfigurator
@@ -9,6 +10,7 @@ import epimetheus.storage.Gateway
 import epimetheus.storage.IgniteGateway
 import io.vertx.core.DeploymentOptions
 import io.vertx.core.Vertx
+import io.vertx.core.json.Json
 import org.apache.ignite.Ignite
 import org.apache.ignite.resources.IgniteInstanceResource
 import org.apache.ignite.services.Service
@@ -24,6 +26,8 @@ class APIService : Service {
     lateinit var routes: List<RouteConfigurator>
 
     override fun init(ctx: ServiceContext?) {
+        Json.mapper.registerKotlinModule()
+
         vertx = Vertx.vertx()
         val configCache = ignite.cache<String, APIServerConfig>(CacheName.CONFIG)
         config = configCache.get(ConfigKey.API_SERVER) ?: APIServerConfig(9090, 10)

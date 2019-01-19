@@ -1,5 +1,7 @@
 package epimetheus
 
+import org.apache.ignite.IgniteTransactions
+import org.apache.ignite.transactions.Transaction
 import java.time.Duration
 
 object DurationUtil {
@@ -26,5 +28,24 @@ object DurationUtil {
             sb.append("ms")
         }
         return sb.toString()
+    }
+}
+
+/**
+ * Wrap code block with Ignite transaction,
+ */
+inline fun transaction(igniteTx: IgniteTransactions, fn: (Transaction) -> Boolean) {
+    val outer = igniteTx.tx()
+    val tx = outer ?: igniteTx.txStart()
+    try {
+        val succeed = fn(tx)
+        if (outer == null && succeed) {
+            tx.commit()
+        }
+    } finally {
+        // if fn return false, tx will be rolled back automatically here
+        if (outer == null) {
+            tx.close()
+        }
     }
 }

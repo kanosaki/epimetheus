@@ -1,86 +1,95 @@
 package epimetheus.prometheus.scrape
 
 import epimetheus.CacheName
+import epimetheus.ClusterConfig
+import epimetheus.transaction
 import org.apache.ignite.Ignite
 import org.apache.ignite.IgniteCache
-import org.apache.ignite.Ignition
-import org.apache.ignite.cache.CacheInterceptorAdapter
+import org.apache.ignite.cache.CacheAtomicityMode
 import org.apache.ignite.cache.CachePeekMode
+import org.apache.ignite.cache.query.ScanQuery
 import org.apache.ignite.configuration.CacheConfiguration
-import org.apache.ignite.resources.IgniteInstanceResource
+import org.apache.ignite.lang.IgniteBiPredicate
 import java.time.LocalDateTime
 import javax.cache.Cache
 
 class ScrapeGateway(val ignite: Ignite) {
-    val statusConf: CacheConfiguration<ScrapeTargetKey, ScrapeSchedule>
-    val statuses: IgniteCache<ScrapeTargetKey, ScrapeSchedule>
-    val targetConf: CacheConfiguration<ScrapeTargetKey, ScrapeTarget>
+    private val igniteTx = ignite.transactions()
+    private val config = ClusterConfig(ignite)
+
+    private val statusConf: CacheConfiguration<ScrapeTargetKey, ScrapeStatus>
+    val statuses: IgniteCache<ScrapeTargetKey, ScrapeStatus>
+    private val targetConf: CacheConfiguration<ScrapeTargetKey, ScrapeTarget>
     val targets: IgniteCache<ScrapeTargetKey, ScrapeTarget>
 
+    private val discoveryConf: CacheConfiguration<String, ScrapeDiscovery>
+    val discoveries: IgniteCache<String, ScrapeDiscovery>
+
     init {
-        statusConf = CacheConfiguration<ScrapeTargetKey, ScrapeSchedule>().apply {
+        statusConf = CacheConfiguration<ScrapeTargetKey, ScrapeStatus>().apply {
             name = CacheName.Prometheus.SCRAPE_STATUSES
+            atomicityMode = CacheAtomicityMode.TRANSACTIONAL_SNAPSHOT
             backups = 1
-            interceptor = StatusCacheInterceptor()
         }
-        statuses = ignite.getOrCreateCache<ScrapeTargetKey, ScrapeSchedule>(statusConf)
+        statuses = ignite.getOrCreateCache<ScrapeTargetKey, ScrapeStatus>(statusConf)
 
         targetConf = CacheConfiguration<ScrapeTargetKey, ScrapeTarget>().apply {
             name = CacheName.Prometheus.SCRAPE_TARGETS
+            atomicityMode = CacheAtomicityMode.TRANSACTIONAL_SNAPSHOT
             backups = 1
-            interceptor = TargetCacheInterceptor()
         }
         targets = ignite.getOrCreateCache<ScrapeTargetKey, ScrapeTarget>(targetConf)
+
+        discoveryConf = CacheConfiguration<String, ScrapeDiscovery>().apply {
+            name = CacheName.Prometheus.SCRAPE_DISCOVERIES
+            atomicityMode = CacheAtomicityMode.TRANSACTIONAL_SNAPSHOT
+            backups = 1
+        }
+        discoveries = ignite.getOrCreateCache(discoveryConf)
     }
 
     fun target(key: ScrapeTargetKey): ScrapeTarget {
         return targets.get(key)
     }
 
-    fun updateStatus(key: ScrapeTargetKey, sched: ScrapeSchedule) {
-        statuses.put(key, sched)
+    fun updateStatus(key: ScrapeTargetKey, status: ScrapeStatus) {
+        // TODO: check existence of target entry?
+        statuses.put(key, status)
     }
 
-    fun localStatuses(): Iterable<Cache.Entry<ScrapeTargetKey, ScrapeSchedule>> {
-        return statuses.localEntries(CachePeekMode.PRIMARY)
-    }
-}
-
-class StatusCacheInterceptor : CacheInterceptorAdapter<ScrapeTargetKey, ScrapeSchedule>() {
-    // TODO: notify?
-    //override fun onBeforePut(entry: Cache.Entry<ScrapeTargetKey, ScrapeSchedule>?, newVal: ScrapeSchedule?): ScrapeSchedule? {
-    //    if (newVal == null) return newVal
-    //    svc.schedule(LocalDateTime.now(), entry!!.key, newVal)
-    //    return newVal
-    //}
-}
-
-class TargetCacheInterceptor : CacheInterceptorAdapter<ScrapeTargetKey, ScrapeTarget>() {
-    @IgniteInstanceResource
-    @Transient
-    private lateinit var ignite: Ignite
-
-    @Transient
-    private var statuses: IgniteCache<ScrapeTargetKey, ScrapeSchedule>? = null
-
-    private fun checkStatusCache() {
-        if (statuses == null) {
-            statuses = ignite.cache(CacheName.Prometheus.SCRAPE_STATUSES)
+    fun putTarget(key: ScrapeTargetKey, target: ScrapeTarget) {
+        transaction(igniteTx) {
+            val prev = targets.get(key)
+            if (prev == null || prev != target) {
+                targets.put(key, target)
+                // clear status
+                statuses.put(key, ScrapeStatus(LocalDateTime.now(), null, null))
+            }
+            true
         }
     }
 
-    override fun onAfterPut(entry: Cache.Entry<ScrapeTargetKey, ScrapeTarget>?) {
-        // use async! to prevent striped executor blocked
-        checkStatusCache()
-        Ignition.ignite().executorService().submit {
-            statuses!!.put(entry!!.key, ScrapeSchedule(LocalDateTime.now(), null, null))
+    fun putDiscovery(name: String, discovery: ScrapeDiscovery) {
+        val global = config.prometheusGlobal
+        transaction(igniteTx) { tx ->
+            // delete old targets
+            val prevTargets = targets.query(ScanQuery<ScrapeTargetKey, ScrapeTarget>(IgniteBiPredicate { k, v ->
+                k.jobName == name
+            }))
+
+            targets.removeAll(prevTargets.map { it.key }.toSet())
+            discoveries.put(name, discovery)
+
+            val targets = discovery.refreshTargets(global)
+            targets.forEach {
+                assert(it.first.jobName == name)
+                putTarget(it.first, it.second)
+            }
+            true
         }
     }
 
-    override fun onAfterRemove(entry: Cache.Entry<ScrapeTargetKey, ScrapeTarget>?) {
-        checkStatusCache()
-        Ignition.ignite().executorService().submit {
-            statuses!!.remove(entry!!.key) // cascade delete, use async!
-        }
+    fun nodeAssignedTargets(): Iterable<Cache.Entry<ScrapeTargetKey, ScrapeTarget>> {
+        return targets.localEntries(CachePeekMode.PRIMARY)
     }
 }

@@ -2,6 +2,7 @@ package epimetheus.api
 
 import epimetheus.prometheus.scrape.ScrapeGateway
 import io.vertx.core.Vertx
+import io.vertx.core.http.HttpMethod
 import io.vertx.core.json.Json
 import io.vertx.ext.web.Router
 import org.apache.ignite.Ignite
@@ -46,6 +47,7 @@ class EpimetheusAPIRoutes(val vertx: Vertx, val ignite: Ignite) : RouteConfigura
                     }
         }
     }
+
     private fun jobApis(ignite: Ignite): Router {
         val scrape = ScrapeGateway(ignite)
         return Router.router(vertx).apply {
@@ -57,6 +59,14 @@ class EpimetheusAPIRoutes(val vertx: Vertx, val ignite: Ignite) : RouteConfigura
                             ScrapeStatus(t.key, t.value, status)
                         }
                         r.end(Json.encode(statuses))
+                    }
+            route(HttpMethod.GET, "/discovery")
+                    .handler { ctx ->
+                        val r = ctx.response()
+                        val m = scrape.discoveries.map { entry ->
+                            entry.value
+                        }
+                        r.end(Json.encode(m))
                     }
         }
     }

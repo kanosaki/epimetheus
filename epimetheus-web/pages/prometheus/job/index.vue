@@ -11,9 +11,9 @@
       >
         <td>{{ props.item.key.jobName }}</td>
         <td>{{ props.item.key.target }}</td>
-        <td>{{ props.item.schedule.lastStatus | renderLastStatus }}</td>
-        <td>{{ props.item.schedule.lastTimestamp | renderPrevTime }}</td>
-        <td>{{ props.item.schedule.nextExec | renderNextExec }}</td>
+        <td>{{ props.item.status.lastResult | renderLastStatus }}</td>
+        <td>{{ props.item.status.lastTimestamp | renderPrevTime }}</td>
+        <td>{{ props.item.status.nextExec | renderNextExec }}</td>
       </template>
     </v-data-table>
   </div>
@@ -25,7 +25,7 @@
 
   export default {
     filters: {
-      // status: epimetheus.prometheus.scrape.ScrapeSchedule
+      // status: epimetheus.prometheus.scrape.ScrapeStatus
       renderLastStatus(status) {
         if (status.status === "ok") {
           return `OK: ${status.latencyNs / 1000 / 1000}ms`
@@ -52,7 +52,7 @@
           headers: [
             {text: 'Name', value: 'name'},
             {text: 'Target', value: 'target'},
-            {text: 'Last Status', value: 'lastStatus'},
+            {text: 'Last Status', value: 'lastResult'},
             {text: 'Last Exec', value: 'lastTimestamp'},
             {text: 'Next Exec', value: 'nextExec'},
           ]
@@ -64,7 +64,6 @@
     },
     async asyncData() {
       const d = await jobStatus()
-      console.log(d.data)
       return {
         data: d.data,
       }

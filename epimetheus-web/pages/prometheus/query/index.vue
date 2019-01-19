@@ -66,7 +66,7 @@
     },
     methods: {
       async onQueryUpdated() {
-        this.$cookies.set('query-saved', this.query)
+        this.$cookies.set(queryCookieKey, this.query)
         const result = await queryRange(this.query, 60 * 60)
         this.datum = result.renderEchartsOptions(chartOptions)
       }

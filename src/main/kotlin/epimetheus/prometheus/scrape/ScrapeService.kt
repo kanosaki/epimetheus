@@ -6,20 +6,21 @@ import io.vertx.core.Handler
 import io.vertx.core.Vertx
 import io.vertx.ext.web.client.WebClient
 import org.apache.ignite.Ignite
-import org.apache.ignite.lang.IgniteRunnable
 import org.apache.ignite.resources.IgniteInstanceResource
 import org.apache.ignite.services.Service
 import org.apache.ignite.services.ServiceContext
-import java.io.Closeable
 import java.time.LocalDateTime
 import java.time.temporal.ChronoUnit
 import java.util.concurrent.ExecutorService
-import java.util.concurrent.Executors
+import java.util.concurrent.LinkedBlockingQueue
+import java.util.concurrent.ThreadPoolExecutor
 import java.util.concurrent.TimeUnit
 
 class ScrapeService : Service {
     companion object {
         val ScanRangeMilliseconds = 10 * 1000L
+        val MaximumStreamThreads = 16
+        val StreamJobQueueSize = 256
     }
 
     @IgniteInstanceResource
@@ -33,7 +34,7 @@ class ScrapeService : Service {
 
 
     override fun init(ctx: ServiceContext?) {
-        submitThread = Executors.newScheduledThreadPool(1)
+        submitThread = ThreadPoolExecutor(1, MaximumStreamThreads, 30, TimeUnit.SECONDS, LinkedBlockingQueue<Runnable>(StreamJobQueueSize))
         vertx = Vertx.vertx()
         client = WebClient.create(vertx)
         storage = IgniteGateway(ignite)
@@ -46,8 +47,22 @@ class ScrapeService : Service {
     override fun execute(ctx: ServiceContext?) {
         while (!ctx!!.isCancelled) {
             val now = LocalDateTime.now()
-            scrapeGate.localStatuses().map { kv ->
-                schedule(now, kv.key, kv.value)
+            scrapeGate.nodeAssignedTargets().map { kv ->
+                val status = scrapeGate.statuses.get(kv.key)
+                val scanLimit = now.plus(ScanRangeMilliseconds, ChronoUnit.MILLIS)
+                if (status.nextExec.isBefore(scanLimit)) {
+                    // TODO: flow control
+                    if (status.nextExec.isBefore(now)) {
+                        vertx.runOnContext {
+                            doScrape(kv.key, kv.value)
+                        }
+                    } else {
+                        val delay = now.until(status.nextExec, ChronoUnit.MILLIS)
+                        vertx.setTimer(delay) {
+                            doScrape(kv.key, kv.value)
+                        }
+                    }
+                }
             }
             Thread.sleep(ScanRangeMilliseconds)
         }
@@ -72,60 +87,36 @@ class ScrapeService : Service {
                 false) // TODO: false?
     }
 
-
-    fun doScrape(key: ScrapeTargetKey) {
-        val cfg = scrapeGate.target(key)
+    private fun doScrape(key: ScrapeTargetKey, cfg: ScrapeTarget) {
+        val log = ignite.log()
         val scr = Scraper(client, cfg)
-        vertx.executeBlocking<ScrapeResult>(scr, false, Handler { ar ->
+        vertx.executeBlocking<ScrapeResponse>(scr, false, Handler { ar ->
             val finishedAt = LocalDateTime.now()
             val status = when (ar.succeeded()) {
                 true -> {
                     val samples = ar.result().samples
-                    println("SCRAPED ${cfg.url} ${samples.size} samples")
+                    log.info("SCRAPED $key ${samples.size} samples")
                     // process background to avoid blocking vert.x event loop thread
                     submitThread.submit {
                         writeSamples(key, cfg, samples)
                         updateTargetStatus(key, true)
                     }
-                    ScrapeStatusSuccess(ar.result().latencyNs)
+                    ScrapeResultSuccess(ar.result().latencyNs)
                 }
                 false -> {
-                    println("SCRAPE FAILED ${cfg.url} ${ar.cause()}")
+                    log.error("SCRAPE FAILED $key ${ar.cause()}")
                     submitThread.submit {
                         updateTargetStatus(key, false)
                     }
-                    ScrapeStatusFailure(ar.cause())
+                    ScrapeResultFailure(ar.cause())
                 }
             }
-            val sched = ScrapeSchedule(
+            val sched = ScrapeStatus(
                     finishedAt.plusNanos((cfg.intervalSeconds * 1e9).toLong()),
                     finishedAt,
                     status
             )
             scrapeGate.updateStatus(key, sched)
-            // TODO: notify
         })
-    }
-
-    private class ScrapeStarter(val svc: ScrapeService, val key: ScrapeTargetKey, val sched: ScrapeSchedule) : IgniteRunnable {
-        var closeToken: Closeable? = null // TODO: should be WeakRef?
-
-        override fun run() {
-            svc.doScrape(key)
-        }
-    }
-
-    private fun schedule(now: LocalDateTime, key: ScrapeTargetKey, sched: ScrapeSchedule) {
-        val scanLimit = now.plus(ScanRangeMilliseconds, ChronoUnit.MILLIS)
-        if (sched.nextExec.isBefore(scanLimit)) {
-            val starter = ScrapeStarter(this, key, sched)
-            if (sched.nextExec.isBefore(now)) {
-                ignite.scheduler().runLocal(starter)
-            } else {
-                val delay = now.until(sched.nextExec, ChronoUnit.MILLIS)
-                val t = ignite.scheduler().runLocal(starter, delay, TimeUnit.MILLISECONDS)
-                starter.closeToken = t
-            }
-        }
     }
 }

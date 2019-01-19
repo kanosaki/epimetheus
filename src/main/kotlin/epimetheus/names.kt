@@ -14,6 +14,8 @@ object CacheName {
          */
         const val SCRAPE_STATUSES = "scrapeStatuses"
 
+        const val SCRAPE_DISCOVERIES = "scrapeDiscoveries"
+
         /**
          * Stores recently fetched samples, focused on throughput rather than capacity.
          */
