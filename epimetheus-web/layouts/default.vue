@@ -3,7 +3,9 @@
     <v-navigation-drawer stateless value="true" clipped app>
       <v-list dense>
         <v-list-tile :to="{ path: `/` }">
-          <v-list-tile-action> <v-icon>home</v-icon> </v-list-tile-action>
+          <v-list-tile-action>
+            <v-icon>home</v-icon>
+          </v-list-tile-action>
           <v-list-tile-title>Home</v-list-tile-title>
         </v-list-tile>
 
@@ -44,12 +46,16 @@
 
             <v-list-tile :to="{ path: `/prometheus/rule/recording` }">
               <v-list-tile-title>Recording</v-list-tile-title>
-              <v-list-tile-action> <v-icon>crd</v-icon> </v-list-tile-action>
+              <v-list-tile-action>
+                <v-icon>crd</v-icon>
+              </v-list-tile-action>
             </v-list-tile>
 
             <v-list-tile :to="{ path: `/prometheus/rule/alert` }">
               <v-list-tile-title>Alert</v-list-tile-title>
-              <v-list-tile-action> <v-icon>crd</v-icon> </v-list-tile-action>
+              <v-list-tile-action>
+                <v-icon>crd</v-icon>
+              </v-list-tile-action>
             </v-list-tile>
           </v-list-group>
         </v-list-group>
@@ -77,12 +83,18 @@
       <v-toolbar-title>Epimetheus</v-toolbar-title>
       <v-spacer />
       <v-toolbar-items class="hidden-sm-and-down">
-        <v-btn flat> ALERTS: N </v-btn>
-        <v-btn flat> STATUS: GREEN </v-btn>
+        <v-btn flat>
+          ALERTS: N
+        </v-btn>
+        <v-btn flat>
+          STATUS: GREEN
+        </v-btn>
       </v-toolbar-items>
     </v-toolbar>
     <v-content>
-      <v-container> <nuxt /> </v-container>
+      <v-container>
+        <nuxt />
+      </v-container>
     </v-content>
   </v-app>
 </template>

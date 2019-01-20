@@ -72,6 +72,7 @@ module.exports = {
      ** You can extend webpack config here
      */
     extend(config, ctx) {
+      if (ctx.isClient) config.devtool = '#source-map'
       // Run ESLint on save
       if (ctx.isDev && ctx.isClient) {
         config.module.rules.push({

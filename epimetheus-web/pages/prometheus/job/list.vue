@@ -1,6 +1,9 @@
 <template>
   <div>
-    <v-toolbar flat color="white">
+    <v-toolbar
+      flat
+      color="white"
+    >
       <v-toolbar-title>Scrape jobs</v-toolbar-title>
       <v-spacer />
       <v-dialog max-width="500px">
@@ -22,7 +25,11 @@
           <v-card-text>
             <v-container grid-list-md>
               <v-layout wrap>
-                <v-flex xs12 sm6 md4>
+                <v-flex
+                  xs12
+                  sm6
+                  md4
+                >
                   <v-text-field
                     v-model="creatingItem.name"
                     label="Dessert name"
@@ -34,10 +41,18 @@
 
           <v-card-actions>
             <v-spacer />
-            <v-btn color="blue darken-1" flat @click="close">
+            <v-btn
+              color="blue darken-1"
+              flat
+              @click="close"
+            >
               Cancel
             </v-btn>
-            <v-btn color="blue darken-1" flat @click="save">
+            <v-btn
+              color="blue darken-1"
+              flat
+              @click="save"
+            >
               Save
             </v-btn>
           </v-card-actions>
@@ -50,13 +65,19 @@
       expand
       item-key="config.job_name"
     >
-      <template slot="items" slot-scope="props">
+      <template
+        slot="items"
+        slot-scope="props"
+      >
         <tr @click="props.expanded = !props.expanded">
           <td>{{ props.item.config.job_name }}</td>
           <td>{{ props.item.config.scrape_interval }}</td>
         </tr>
       </template>
-      <template slot="expand" slot-scope="props">
+      <template
+        slot="expand"
+        slot-scope="props"
+      >
         <v-card flat>
           <v-card-text> Hello {{ props.item.config.job_name }}</v-card-text>
         </v-card>
