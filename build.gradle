@@ -15,6 +15,10 @@ buildscript {
     }
 }
 
+plugins {
+    id 'com.google.cloud.tools.jib' version '1.0.0'
+}
+
 group 'kanosaki'
 version '1.0-SNAPSHOT'
 
@@ -120,4 +124,13 @@ test {
 
 shadowJar {
     zip64 true
+}
+
+jib {
+    container {
+        mainClass = 'MainKt'
+    }
+    to {
+        image = 'kanosaki/epimetheus'
+    }
 }
