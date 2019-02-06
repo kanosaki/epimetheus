@@ -1,6 +1,5 @@
-const pkg = require('./package')
-
 const VuetifyLoaderPlugin = require('vuetify-loader/lib/plugin')
+const pkg = require('./package')
 
 module.exports = {
   mode: 'spa',
@@ -48,6 +47,7 @@ module.exports = {
     '@nuxtjs/axios',
     '@nuxtjs/pwa',
     'cookie-universal-nuxt',
+    '~/modules/typescript.js',
   ],
   /*
    ** Axios module configuration
