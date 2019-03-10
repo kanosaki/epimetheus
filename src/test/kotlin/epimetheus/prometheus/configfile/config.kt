@@ -1,6 +1,5 @@
-package epimetheus.prometheus
+package epimetheus.prometheus.configfile
 
-import epimetheus.prometheus.configfile.*
 import org.junit.jupiter.api.Test
 import java.time.Duration
 import kotlin.test.assertEquals

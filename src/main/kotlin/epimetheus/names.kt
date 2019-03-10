@@ -22,6 +22,10 @@ object CacheName {
         const val FRESH_SAMPLES = "eden"
 
         const val METRIC_META = "metric_meta"
+
+        const val RULE_GROUP = "rule_group"
+        const val RULE_CONF = "rule_conf"
+        const val ALERT_STATUS = "alert_status"
     }
 }
 
@@ -32,6 +36,7 @@ object ConfigKey {
 object ServiceName {
     object Prometheus {
         const val SCRAPE_SERVICE = "scrape"
+        const val JOB_SERVICE = "job"
         const val API_SERVER = "api"
     }
 }

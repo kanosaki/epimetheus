@@ -8,10 +8,13 @@ import it.unimi.dsi.fastutil.longs.Long2DoubleRBTreeMap
 import it.unimi.dsi.fastutil.longs.LongArrayList
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet
 import org.apache.ignite.Ignite
+import org.apache.ignite.cache.CacheEntryProcessor
 import org.apache.ignite.cache.affinity.AffinityKeyMapped
 import org.apache.ignite.configuration.CacheConfiguration
+import org.apache.ignite.resources.IgniteInstanceResource
 import org.apache.ignite.stream.StreamTransformer
 import java.util.*
+import javax.cache.processor.MutableEntry
 
 
 data class EdenPageKey(@AffinityKeyMapped val metricID: Long, val timestamp: Long)
@@ -34,12 +37,14 @@ class EdenPageStore(val ignite: Ignite, val windowSize: Long = 5 * 60 * 1000) : 
         return ((ts + windowSize * delta) / windowSize) * windowSize
     }
 
-    private val streamer = ignite.dataStreamer<EdenPageKey, EdenPage>(FRESH_SAMPLES).apply {
-        allowOverwrite(true)
-        receiver(StreamTransformer.from { entry, arguments ->
+    class CacheReceiver : CacheEntryProcessor<EdenPageKey, EdenPage, Any?> {
+        @IgniteInstanceResource
+        lateinit var ignite: Ignite
+
+        override fun process(entry: MutableEntry<EdenPageKey, EdenPage>, vararg arguments: Any?): Any? {
             if (arguments.size != 1) {
                 ignite.log().error("Invalid argument size! $arguments")
-                return@from null
+                return null
             }
             val sample = arguments[0] as EdenPage
             if (entry.value == null) {
@@ -51,8 +56,13 @@ class EdenPageStore(val ignite: Ignite, val windowSize: Long = 5 * 60 * 1000) : 
                 }
                 entry.value = newpage
             }
-            return@from null
-        })
+            return null
+        }
+    }
+
+    private val streamer = ignite.dataStreamer<EdenPageKey, EdenPage>(FRESH_SAMPLES).apply {
+        allowOverwrite(true)
+        receiver(StreamTransformer.from(CacheReceiver()))
     }
 
     fun push(ts: Long, samples: Collection<ScrapedSample>, flush: Boolean = true) {
