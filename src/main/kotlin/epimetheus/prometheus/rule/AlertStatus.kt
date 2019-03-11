@@ -1,6 +1,8 @@
 package epimetheus.prometheus.rule
 
-import epimetheus.model.Metric
-
-class AlertStatus(val firedSince: Map<Metric, Long>) {
+enum class AlertStatus(val repr: String) {
+    OK("ok"),
+    PENDING("pending"),
+    FIRING("firing"),
+    ERROR("error")
 }

@@ -21,7 +21,7 @@ class AlertingRuleJob(val key: RuleKey, val rule: AlertingRule) : JobRunnable {
         val alertingMetrics = mutableListOf<Metric>()
         when (v) {
             is RScalar -> {
-                if (v.value == 1.0) {
+                if (v.value >= 1.0) {
                     alertingMetrics.add(Metric.empty)
                 }
             }
@@ -30,7 +30,7 @@ class AlertingRuleJob(val key: RuleKey, val rule: AlertingRule) : JobRunnable {
                     val series = v.series[i]
                     val metric = v.metrics[i]
                     if (series.values.size > 0) {
-                        if (series.values[0] == 1.0) {
+                        if (series.values[0] >= 1.0) {
                             alertingMetrics.add(metric)
                         }
                     }
@@ -56,7 +56,7 @@ class AlertingRuleJob(val key: RuleKey, val rule: AlertingRule) : JobRunnable {
         }
 
         // update alert status
-        ruleGateway.putAlertStatus(key, AlertStatus(nextStatus))
+        ruleGateway.putAlertStatus(key, AlertEvalResult(nextStatus, now))
 
         if (firedMetrics.isNotEmpty()) {
             // fire alerts

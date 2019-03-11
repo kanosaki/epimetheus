@@ -23,20 +23,20 @@ class RuleGateway(val ignite: Ignite) {
         backups = 1
     }
 
-    private val alertStatusConf = CacheConfiguration<RuleKey, AlertStatus>().apply {
+    private val alertStatusConf = CacheConfiguration<RuleKey, AlertEvalResult>().apply {
         name = CacheName.Prometheus.ALERT_STATUS
         backups = 1
     }
 
     private val ruleCache: IgniteCache<RuleKey, Rule>
     private val ruleGroupCache: IgniteCache<String, RuleGroup>
-    private val alertStatusCache: IgniteCache<RuleKey, AlertStatus>
+    private val alertEvalResultCache: IgniteCache<RuleKey, AlertEvalResult>
     private val jobGateway: JobGateway
 
     init {
         ruleCache = ignite.getOrCreateCache(ruleConf)
         ruleGroupCache = ignite.getOrCreateCache(ruleGroupConf)
-        alertStatusCache = ignite.getOrCreateCache(alertStatusConf)
+        alertEvalResultCache = ignite.getOrCreateCache(alertStatusConf)
 
         jobGateway = JobGateway(ignite)
     }
@@ -77,15 +77,15 @@ class RuleGateway(val ignite: Ignite) {
         }
         val rulesSet = rules.map { it.key }.toSet()
         ruleCache.clearAll(rulesSet)
-        alertStatusCache.clearAll(rulesSet)
+        alertEvalResultCache.clearAll(rulesSet)
     }
 
-    fun getAlertStatus(key: RuleKey): AlertStatus? {
-        return alertStatusCache.get(key)
+    fun getAlertStatus(key: RuleKey): AlertEvalResult? {
+        return alertEvalResultCache.get(key)
     }
 
-    fun putAlertStatus(key: RuleKey, status: AlertStatus) {
-        alertStatusCache.put(key, status)
+    fun putAlertStatus(key: RuleKey, evalResult: AlertEvalResult) {
+        alertEvalResultCache.put(key, evalResult)
     }
 
     private inline fun lockGroup(name: String, fn: () -> Unit) {
