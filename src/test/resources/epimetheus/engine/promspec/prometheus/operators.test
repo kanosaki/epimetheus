@@ -22,6 +22,20 @@ eval instant at 50m 2 - SUM(http_requests) BY (job)
 	{job="api-server"} -998
 	{job="app-server"} -2598
 
+eval instant at 50m -http_requests{job="api-server",instance="0",group="production"}
+  {job="api-server",instance="0",group="production"} -100
+
+eval instant at 50m +http_requests{job="api-server",instance="0",group="production"}
+  http_requests{job="api-server",instance="0",group="production"} 100
+
+# Valid in prometheus, but invalid in epimetheus
+#eval instant at 50m - - - SUM(http_requests) BY (job)
+#	{job="api-server"} -1000
+#	{job="app-server"} -2600
+#
+#eval instant at 50m - - - 1
+#  -1
+
 eval instant at 50m 1000 / SUM(http_requests) BY (job)
 	{job="api-server"} 1
 	{job="app-server"} 0.38461538461538464
@@ -354,3 +368,12 @@ eval instant at 5m metricA + ignoring() metricB
 
 eval instant at 5m metricA + metricB
   {baz="meh"} 7
+
+clear
+
+# Test duplicate labelset in promql output.
+load 5m
+  testmetric1{src="a",dst="b"} 0
+  testmetric2{src="a",dst="b"} 1
+
+eval_fail instant at 0m -{__name__=~'testmetric1|testmetric2'}

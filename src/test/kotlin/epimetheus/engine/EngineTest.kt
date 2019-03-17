@@ -1,5 +1,6 @@
 package epimetheus.engine
 
+import epimetheus.engine.plan.RConstant
 import epimetheus.engine.plan.RPointMatrix
 import epimetheus.engine.plan.RScalar
 import epimetheus.model.Metric
@@ -16,14 +17,14 @@ class EngineTest {
         val eng = Engine(MockGateway())
         val ts = TimeFrames.instant(0)
         listOf(
-                "1" to RScalar(1.0),
-                "-1" to RScalar(-1.0),
-                "Inf" to RScalar(Double.POSITIVE_INFINITY),
-                "1+1" to RScalar(2.0),
-                "1*2" to RScalar(2.0),
-                "1*-2" to RScalar(-2.0),
-                "1/2" to RScalar(0.5),
-                "1/(1+1)" to RScalar(0.5)
+                "1" to RConstant(1.0),
+                "-1" to RConstant(-1.0),
+                "Inf" to RConstant(Double.POSITIVE_INFINITY),
+                "1+1" to RConstant(2.0),
+                "1*2" to RConstant(2.0),
+                "1*-2" to RConstant(-2.0),
+                "1/2" to RConstant(0.5),
+                "1/(1+1)" to RConstant(0.5)
         ).forEachIndexed { i, pair ->
             val res = eng.exec(pair.first, ts)
             assertEquals(pair.second, res, "$i")

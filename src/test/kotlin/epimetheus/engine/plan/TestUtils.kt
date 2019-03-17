@@ -25,7 +25,7 @@ object TestUtils {
                         v.windowSize,
                         v.offset)
             }
-            is Scalar -> RScalar(v.value)
+            is Scalar -> RConstant(v.value)
             is StringValue -> RString(v.value)
             else -> TODO("not implemented for ${v.javaClass}")
         }
@@ -38,7 +38,7 @@ object TestUtils {
             } else {
                 assertRPointMatrixEquals(v1, v2, allowNonDetComparision, msg)
             }
-        } else if (v1 is RScalar && v2 is RScalar) {
+        } else if (v1 is RConstant && v2 is RConstant) {
             if (!compareDouble(v1.value, v2.value, allowNonDetComparision)) {
                 fail("value not equal: $v1 != $v2 (allowNonDetComparision=$allowNonDetComparision)")
             }

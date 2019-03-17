@@ -61,7 +61,8 @@ data class BoolConvertNode(
     override fun evaluate(ec: ExecContext, eng: EngineContext): RuntimeValue {
         val v = value.evaluate(ec, eng)
         return when (v) {
-            is RScalar -> RScalar(ValueUtils.boolConvert(v.value))
+            is RConstant -> RConstant(ValueUtils.boolConvert(v.value))
+            is RScalarVector -> RScalarVector(v.values.mapCopy { _, d -> ValueUtils.boolConvert(d) })
             is RPointMatrix -> {
                 val m = v.mapValues { d, _, _ ->
                     ValueUtils.boolConvert(d)
@@ -86,7 +87,7 @@ data class ScalarLiteralNode(val value: Double) : PlanNode {
     override val affinity: NodeAffinity = NodeAffinity.Any
 
     override fun evaluate(ec: ExecContext, eng: EngineContext): RuntimeValue {
-        return RScalar(value)
+        return RConstant(value)
     }
 }
 

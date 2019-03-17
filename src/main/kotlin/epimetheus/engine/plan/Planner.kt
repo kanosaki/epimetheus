@@ -35,6 +35,15 @@ class Planner(
             is BinaryCall -> {
                 binOpPlanner.plan(this, ast, ctx)
             }
+            is MinusExpr -> {
+                binOpPlanner.plan(this,
+                        BinaryCall(
+                                BinaryOp.mulOp,
+                                NumberLiteral(-1.0),
+                                ast.expr,
+                                VectorMatching(VectorMatchingCardinality.OneToOne, listOf(), false, listOf())),
+                        ctx)
+            }
             is AggregatorCall -> {
                 aggregatorPlanner.plan(this, ast, ctx)
             }
@@ -76,7 +85,22 @@ interface RuntimeValue : Value { //temp name
 
 }
 
-data class RScalar(val value: Double) : RuntimeValue
+interface RScalar : RuntimeValue {
+    fun at(idx: Int): Double
+}
+
+data class RConstant(val value: Double) : RScalar {
+    override fun at(idx: Int): Double {
+        return value
+    }
+}
+
+data class RScalarVector(val values: DoubleSlice) : RScalar {
+    override fun at(idx: Int): Double {
+        return values[idx]
+    }
+}
+
 data class RString(val value: String) : RuntimeValue
 
 data class RPoints(val timestamps: LongSlice, val values: DoubleSlice) : RuntimeValue {
@@ -118,7 +142,7 @@ interface RData : RuntimeValue {
 }
 
 data class RRangeMatrix(override val metrics: List<Metric>, val chunks: List<RRanges>, val frames: TimeFrames, val range: Long, override val offset: Long = 0) : RData {
-    inline fun unify(fn: (Long, LongSlice, DoubleSlice) -> Double): RPointMatrix {
+    inline fun unify(fn: (Int, Long, LongSlice, DoubleSlice) -> Double): RPointMatrix {
         val frameSlice = LongSlice.wrap(frames.toLongArray()) // TODO: optimize
         return RPointMatrix(metrics, chunks.map { rRanges ->
             val vs = DoubleSlice.init(rRanges.ranges.size) { i ->
@@ -127,7 +151,7 @@ data class RRangeMatrix(override val metrics: List<Metric>, val chunks: List<RRa
 //                assert(ranges.timestamps.size == 1 || ranges.timestamps.first() <= ts && ts <= ranges.timestamps.last()) {
 //                    "skewed timestamp! ${ranges.timestamps.first()}(range begin) <= $ts(frame timestamp) <= ${ranges.timestamps.last()}(range end)"
 //                }
-                fn(ts, ranges.timestamps, ranges.values)
+                fn(i, ts, ranges.timestamps, ranges.values)
             }
             RPoints(frameSlice, vs)
         }, frames)
@@ -229,6 +253,23 @@ data class RPointMatrix(override val metrics: List<Metric>, val series: List<RPo
             Row(metrics[i], series[i])
         }
         rows.sortBy { it.m.fingerprint() }
+        return RPointMatrix(rows.map { it.m }, rows.map { it.s }, frames, offset)
+    }
+
+    fun sortSeriesByLastValue(desc: Boolean = false): RPointMatrix {
+        if (this.colCount == 0) {
+            return this
+        }
+        class Row(val m: Metric, val s: RPoints)
+
+        val rows = Array(metrics.size) { i ->
+            Row(metrics[i], series[i])
+        }
+        if (desc) {
+            rows.sortByDescending { it.s.values[it.s.values.size - 1] }
+        } else {
+            rows.sortBy { it.s.values[it.s.values.size - 1] }
+        }
         return RPointMatrix(rows.map { it.m }, rows.map { it.s }, frames, offset)
     }
 

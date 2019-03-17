@@ -165,6 +165,8 @@ data class AggregatorCall(val agg: Aggregator, val params: List<Expression>, val
     }
 }
 
+data class MinusExpr(val expr: Expression): Expression
+
 interface Literal : Expression {
     fun labelMatchExpr(): String
 }

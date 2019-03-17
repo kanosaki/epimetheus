@@ -118,10 +118,9 @@ interface Aggregator {
 
         val variadicAggregator = listOf(
                 VariadicAggregator("topk") { ec, args, group ->
-                    val kDbl = args[0] as RScalar
-                    val k = kDbl.value.toInt()
+                    val ks = args[0] as RScalar
                     val m = args[1] as RPointMatrix
-                    val tops = Double2IntArrayMap(Math.min(k, m.rowCount))
+                    val tops = Double2IntArrayMap(m.rowCount)
                     val buckets = Long2ObjectOpenHashMap<AbstractIntSet>(m.metrics.size)
                     val bucketed = group != null
                     m.metrics.forEachIndexed { index, met ->
@@ -137,6 +136,10 @@ interface Aggregator {
 
                     val ret = m.duplicate()
                     for (tsIdx in 0 until m.colCount) {
+                        val k = ks.at(tsIdx)
+                        if (k < 1.0) {
+                            continue
+                        }
                         buckets.forEach { _, bucket ->
                             for (metIdx in bucket.iterator()) {
                                 val v = m.series[metIdx].values[tsIdx]
@@ -165,10 +168,9 @@ interface Aggregator {
                     ret.prune()
                 },
                 VariadicAggregator("bottomk") { ec, args, group ->
-                    val kDbl = args[0] as RScalar
-                    val k = kDbl.value.toInt()
+                    val k = args[0] as RScalar
                     val m = args[1] as RPointMatrix
-                    val tops = Double2IntArrayMap(Math.min(k, m.rowCount))
+                    val tops = Double2IntArrayMap(m.rowCount)
                     val buckets = Long2ObjectOpenHashMap<AbstractIntSet>(m.metrics.size)
                     val bucketed = group != null
                     m.metrics.forEachIndexed { index, met ->
@@ -187,7 +189,7 @@ interface Aggregator {
                         buckets.forEach { _, bucket ->
                             for (metIdx in bucket.iterator()) {
                                 val v = m.series[metIdx].values[tsIdx]
-                                if (tops.size < k) {
+                                if (tops.size < k.at(tsIdx)) {
                                     tops[v] = metIdx
                                 } else {
                                     val max = tops.maxBy { if (it.key.isNaN()) Double.POSITIVE_INFINITY else it.key }!!
@@ -252,9 +254,8 @@ interface Aggregator {
                     RPointMatrix(metrics, series, ec.frames)
                 },
                 VariadicAggregator("quantile") { ec, args, group ->
-                    val q = (args[0] as RScalar).value
+                    val q = args[0] as RScalar
                     val pm = args[1] as RPointMatrix
-                    val metrics = pm.metrics
                     val timestamps = LongSlice.wrap(ec.frames.toLongArray())
                     fun quantileFn(values: List<DoubleSlice>): DoubleSlice {
                         val dal = DoubleArrayList(values.size)
@@ -269,7 +270,7 @@ interface Aggregator {
                                 return@init Mat.StaleValue
                             }
                             dal.trim()
-                            val ret = Utils.quantile(q, dal.elements())
+                            val ret = Utils.quantile(q.at(tsIdx), dal.elements())
                             dal.clear()
                             ret
                         }

@@ -1,5 +1,6 @@
 package epimetheus.prometheus.api
 
+import epimetheus.engine.plan.RConstant
 import epimetheus.engine.plan.RPointMatrix
 import epimetheus.engine.plan.RScalar
 import epimetheus.engine.plan.RString
@@ -92,12 +93,13 @@ object Util {
                 }
                 Result(resultType, series)
             }
-            is RScalar -> {
+            is RConstant -> {
                 Result("scalar", v.value)
             }
             is RString -> {
                 Result("string", v.value)
             }
+            // TODO: support RScalarVector?
             else -> {
                 throw RuntimeException("never here")
             }

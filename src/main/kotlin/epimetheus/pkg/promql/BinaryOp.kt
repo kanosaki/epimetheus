@@ -292,5 +292,6 @@ abstract class BinaryOp {
                     GridMat(resultMetrics.toTypedArray(), lhs.timestamps, resultValues)
                 }
         )
+        val mulOp = builtins.first { it.name == "*" }
     }
 }

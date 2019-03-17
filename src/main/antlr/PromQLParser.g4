@@ -192,7 +192,11 @@ expr
     ;
 
 atom
-    : application
+    : '-' application
+    | '+' application
+    | application
+    | '-' selector
+    | '+' selector
     | selector
     | literals
     ;

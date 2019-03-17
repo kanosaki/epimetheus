@@ -22,7 +22,7 @@ interface Function {
 
     companion object {
         private fun extrapolatedRate(m: RRangeMatrix, frames: TimeFrames, isCounter: Boolean, isRate: Boolean): RPointMatrix {
-            return m.unify { ts, timestamps, values ->
+            return m.unify { _, ts, timestamps, values ->
                 val rangeStart = ts - m.range - m.offset
                 val rangeEnd = ts - m.offset
 
@@ -94,7 +94,7 @@ interface Function {
         }
 
         private fun instantValue(m: RRangeMatrix, frames: TimeFrames, isRate: Boolean): RPointMatrix {
-            return m.unify { ts, timestamps, values ->
+            return m.unify { _, ts, timestamps, values ->
                 if (values.size < 2) {
                     return@unify Mat.StaleValue
                 }
@@ -125,7 +125,7 @@ interface Function {
                 },
                 MapFunction("avg_over_time") { ctx, args ->
                     val m = args[0] as RRangeMatrix
-                    m.unify { _, _, vs ->
+                    m.unify { _, _, _, vs ->
                         vs.sum() / vs.size
                     }
                 },
@@ -135,7 +135,7 @@ interface Function {
                 },
                 MapFunction("changes") { ctx, args ->
                     val m = args[0] as RRangeMatrix
-                    m.unify { _, _, vs ->
+                    m.unify { _, _, _, vs ->
                         when {
                             vs.size < 2 -> 0.0
                             else -> {
@@ -153,18 +153,16 @@ interface Function {
                 MapFunction("clamp_max") { _, args ->
                     val m = args[0] as RPointMatrix
                     val p = args[1] as RScalar
-                    val v = p.value
-                    m.mapValues { d, _, _ -> Math.min(d, v) }
+                    m.mapValues { d, _, idx -> Math.min(d, p.at(idx)) }
                 },
                 MapFunction("clamp_min") { _, args ->
                     val m = args[0] as RPointMatrix
                     val p = args[1] as RScalar
-                    val v = p.value
-                    m.mapValues { d, _, _ -> Math.max(d, v) }
+                    m.mapValues { d, _, idx -> Math.max(d, p.at(idx)) }
                 },
                 MapFunction("count_over_time") { ctx, args ->
                     val m = args[0] as RRangeMatrix
-                    m.unify { _, _, vs ->
+                    m.unify { _, _, _, vs ->
                         vs.count { !Mat.isStale(it) }.toDouble()
                     }
                 },
@@ -174,7 +172,7 @@ interface Function {
                 },
                 MapFunction("deriv") { ctx, args ->
                     val m = args[0] as RRangeMatrix
-                    m.unify { ts, timestamps, values ->
+                    m.unify { _, ts, timestamps, values ->
                         val res = linearRegression(values, timestamps, timestamps[0])
                         res[0] // return slope
                     }
@@ -189,23 +187,22 @@ interface Function {
                 },
                 MapFunction("holt_winters") { ctx, args ->
                     val m = args[0] as RRangeMatrix
-                    val sf = (args[1] as RScalar).value // smoothing factor
-                    val tf = (args[2] as RScalar).value // trend factor
+                    val sfs = args[1] as RScalar // smoothing factor
+                    val tfs = args[2] as RScalar // trend factor
+
                     fun calcTrendValues(i: Int, s0: Double, s1: Double, b: Double): Double {
                         if (i == 0) {
                             return b
+                        }
+                        val tf = tfs.at(i)
+                        if (tf <= 0.0 || tf >= 1.0) {
+                            throw PromQLException("invalid trend factor. Expected: 0 < tf < 1, got: ${tf}")
                         }
                         val x = tf * (s1 - s0)
                         val y = (1 - tf) * b
                         return x + y
                     }
-                    if (sf <= 0.0 || sf >= 1.0) {
-                        throw PromQLException("invalid smoothing factor. Expected: 0 < sf < 1, got: ${sf}")
-                    }
-                    if (tf <= 0.0 || tf >= 1.0) {
-                        throw PromQLException("invalid trend factor. Expected: 0 < tf < 1, got: ${tf}")
-                    }
-                    m.unify { ts, timestamps, values ->
+                    m.unify { _, ts, timestamps, values ->
                         val l = values.size
                         if (l < 2) {
                             return@unify Mat.StaleValue
@@ -216,6 +213,10 @@ interface Function {
                         var x = 0.0
                         var y = 0.0
                         for (i in 1 until l) {
+                            val sf = sfs.at(i)
+                            if (sf <= 0.0 || sf >= 1.0) {
+                                throw PromQLException("invalid smoothing factor. Expected: 0 < sf < 1, got: ${sf}")
+                            }
                             x = sf * values[i]
                             b = calcTrendValues(i - 1, s0, s1, b)
                             y = (1 - sf) * (s1 + b)
@@ -252,7 +253,7 @@ interface Function {
                 },
                 MapFunction("max_over_time") { ctx, args ->
                     val m = args[0] as RRangeMatrix
-                    m.unify { _, _, vs ->
+                    m.unify { _, _, _, vs ->
                         var ret: Double? = null
                         // Mat.StaleValue is a NaN but vs.max() returns NaN if there is any NaN.
                         for (v in vs) {
@@ -269,7 +270,7 @@ interface Function {
                 },
                 MapFunction("min_over_time") { ctx, args ->
                     val m = args[0] as RRangeMatrix
-                    m.unify { _, _, vs ->
+                    m.unify { _, _, _, vs ->
                         var ret: Double? = null
                         // Mat.StaleValue is a NaN but vs.max() returns NaN if there is any NaN.
                         for (v in vs) {
@@ -287,22 +288,22 @@ interface Function {
                 MapFunction("predict_linear") { ctx, args ->
                     val m = args[0] as RRangeMatrix
                     val s = args[1] as RScalar
-                    m.unify { ts, timestamps, values ->
+                    m.unify { idx, ts, timestamps, values ->
                         val res = linearRegression(values, timestamps, ts)
                         val slope = res[0]
                         val intercept = res[1]
-                        slope * s.value + intercept
+                        slope * s.at(idx) + intercept
                     }
                 },
                 MapFunction("quantile_over_time", mainParamIndex = 1) { ctx, args ->
-                    val q = (args[0] as RScalar).value
+                    val q = args[0] as RScalar
                     val m = args[1] as RRangeMatrix
-                    m.unify { _, _, values ->
+                    m.unify { idx, _, _, values ->
                         if (values.isEmpty()) {
                             return@unify Mat.StaleValue
                         }
                         val heap = values.clone()
-                        Utils.quantile(q, heap.values)
+                        Utils.quantile(q.at(idx), heap.values)
                     }
                 },
                 MapFunction("rate") { ctx, args ->
@@ -311,7 +312,7 @@ interface Function {
                 },
                 MapFunction("resets") { ctx, args ->
                     val m = args[0] as RRangeMatrix
-                    m.unify { _, _, vs ->
+                    m.unify { _, _, _, vs ->
                         when {
                             vs.size < 2 -> 0.0
                             else -> {
@@ -331,7 +332,7 @@ interface Function {
                     val toNearest = if (args.size >= 2) {
                         val a1 = args[1]
                         when (a1) {
-                            is RScalar -> a1.value
+                            is RConstant -> a1.value
                             else -> throw PromQLException("scalar expected for round second argument, but got ${a1.javaClass}")
                         }
                     } else {
@@ -346,7 +347,7 @@ interface Function {
                 },
                 MapFunction("stddev_over_time") { ctx, args ->
                     val m = args[0] as RRangeMatrix
-                    m.unify { _, _, values ->
+                    m.unify { _, _, _, values ->
                         var aux = 0.0
                         var count = 0.0
                         var mean = 0.0
@@ -361,7 +362,7 @@ interface Function {
                 },
                 MapFunction("stdvar_over_time") { ctx, args ->
                     val m = args[0] as RRangeMatrix
-                    m.unify { _, _, values ->
+                    m.unify { _, _, _, values ->
                         var aux = 0.0
                         var count = 0.0
                         var mean = 0.0
@@ -376,7 +377,7 @@ interface Function {
                 },
                 MapFunction("sum_over_time") { ctx, args ->
                     val m = args[0] as RRangeMatrix
-                    m.unify { _, _, vs ->
+                    m.unify { _, _, _, vs ->
                         vs.sum()
                     }
                 },
@@ -433,6 +434,30 @@ interface Function {
                     }
                 },
                 object : Function {
+                    override val name = "sort"
+
+                    override fun plan(params: List<PlanNode>): PlanNode {
+                        return FunctionNode(name, VariableMetric, params)
+                    }
+
+                    override fun eval(ec: ExecContext, metrics: MetricPlan, args: List<RuntimeValue>, params: List<PlanNode>): RuntimeValue {
+                        val m = args[0] as RPointMatrix
+                        return m.sortSeriesByLastValue()
+                    }
+                },
+                object : Function {
+                    override val name = "sort_desc"
+
+                    override fun plan(params: List<PlanNode>): PlanNode {
+                        return FunctionNode(name, VariableMetric, params)
+                    }
+
+                    override fun eval(ec: ExecContext, metrics: MetricPlan, args: List<RuntimeValue>, params: List<PlanNode>): RuntimeValue {
+                        val m = args[0] as RPointMatrix
+                        return m.sortSeriesByLastValue(true)
+                    }
+                },
+                object : Function {
                     override val name = "time"
 
                     override fun plan(params: List<PlanNode>): PlanNode {
@@ -440,7 +465,7 @@ interface Function {
                     }
 
                     override fun eval(ec: ExecContext, metrics: MetricPlan, args: List<RuntimeValue>, params: List<PlanNode>): RuntimeValue {
-                        return RScalar(ec.frames.first() / 1000.0)
+                        return RConstant(ec.frames.first() / 1000.0)
                     }
                 },
                 object : Function {
@@ -452,7 +477,7 @@ interface Function {
 
                     override fun eval(ec: ExecContext, metrics: MetricPlan, args: List<RuntimeValue>, params: List<PlanNode>): RuntimeValue {
                         val arg = args[0] as RScalar
-                        return RPointMatrix(listOf(Metric.empty), listOf(RPoints.init(ec.frames) { _, _ -> arg.value }), ec.frames)
+                        return RPointMatrix(listOf(Metric.empty), listOf(RPoints.init(ec.frames) { i, _ -> arg.at(i) }), ec.frames)
                     }
                 },
                 object : Function {
@@ -463,7 +488,12 @@ interface Function {
                     }
 
                     override fun eval(ec: ExecContext, metrics: MetricPlan, args: List<RuntimeValue>, params: List<PlanNode>): RuntimeValue {
-                        TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
+                        val m = args[0] as RPointMatrix
+                        return if (m.series.size == 1) {
+                            RScalarVector(m.series[0].values)
+                        } else {
+                            RConstant(Double.NaN)
+                        }
                     }
                 },
                 object : Function {
@@ -474,13 +504,13 @@ interface Function {
                     }
 
                     override fun eval(ec: ExecContext, metrics: MetricPlan, args: List<RuntimeValue>, params: List<PlanNode>): RuntimeValue {
-                        val q = (args[0] as RScalar).value
+                        val qs = args[0] as RScalar
                         val m = args[1] as RPointMatrix
 
                         data class Bucket(val upperBound: Double, val count: Double)
                         data class MetricWithBuckets(val metric: Metric, val buckets: MutableList<Bucket>)
 
-                        fun bucketQuantile(buckets: MutableList<Bucket>): Double {
+                        fun bucketQuantile(q: Double, buckets: MutableList<Bucket>): Double {
                             if (q < 0) {
                                 return Double.NEGATIVE_INFINITY
                             }
@@ -529,6 +559,7 @@ interface Function {
                         val columAccumlator = Array<List<Pair<Metric, Double>>>(timestampSize) { emptyList() }
 
                         for (tsIdx in 0 until timestampSize) {
+                            val q = qs.at(tsIdx)
                             val sigToMetBuckets = Long2ObjectOpenHashMap<MetricWithBuckets>()
                             for (metIdx in 0 until m.metrics.size) {
                                 val met = m.metrics[metIdx]
@@ -546,7 +577,7 @@ interface Function {
                             val res = mutableListOf<Pair<Metric, Double>>()
                             sigToMetBuckets.values.forEach { mb ->
                                 if (!mb.buckets.isEmpty()) {
-                                    res.add(mb.metric to bucketQuantile(mb.buckets))
+                                    res.add(mb.metric to bucketQuantile(q, mb.buckets))
                                 }
                             }
                             columAccumlator[tsIdx] = res

@@ -33,6 +33,10 @@ class ParseTest {
         val data = listOf(
                 "1" to
                         num(1.0), // TODO: add test for literals
+                "-1" to
+                        num(-1.0),
+                "-1 + 2" to
+                        bin("+", num(-1.0), num(2.0)),
 
                 "1 + 2" to
                         bin("+", num(1.0), num(2.0)),
@@ -45,6 +49,8 @@ class ParseTest {
 
                 "(1 + 2) * 3" to
                         bin("*", bin("+", num(1.0), num(2.0)), num(3.0)),
+
+                "-foo" to MinusExpr(InstantSelector("foo", listOf(), Duration.ZERO)),
 
                 "foo{hoge=\"fuga\", a=~\"b.*\", c!=1} offset 10s" to
                         InstantSelector(
@@ -137,7 +143,7 @@ class ParseTest {
                         )
         )
         data.forEachIndexed { index, pair ->
-            assertEquals(pair.second, PromQL.parse(CharStreams.fromString(pair.first), true), "Error at $index : ${pair.first}")
+            assertEquals(pair.second, PromQL.parse(CharStreams.fromString(pair.first), false), "Error at $index : ${pair.first}")
         }
     }
 

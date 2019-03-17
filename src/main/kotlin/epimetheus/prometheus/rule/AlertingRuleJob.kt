@@ -1,6 +1,7 @@
 package epimetheus.prometheus.rule
 
 import epimetheus.engine.Engine
+import epimetheus.engine.plan.RConstant
 import epimetheus.engine.plan.RPointMatrix
 import epimetheus.engine.plan.RScalar
 import epimetheus.job.JobExitStatus
@@ -20,11 +21,12 @@ class AlertingRuleJob(val key: RuleKey, val rule: AlertingRule) : JobRunnable {
         val v = engine.exec(rule.expr, TimeFrames.instant(now))
         val alertingMetrics = mutableListOf<Metric>()
         when (v) {
-            is RScalar -> {
+            is RConstant -> {
                 if (v.value >= 1.0) {
                     alertingMetrics.add(Metric.empty)
                 }
             }
+            // TODO: support RScalarVector?
             is RPointMatrix -> {
                 for (i in 0 until v.rowCount) {
                     val series = v.series[i]

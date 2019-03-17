@@ -198,7 +198,11 @@ object PromQL {
         override fun visitAtom(ctx: PromQLParser.AtomContext?): Expression {
             val e = ctx!!.selector() ?: ctx.application()
             return if (e != null) {
-                visit(e)
+                if (ctx.OpSub() == null) {
+                    visit(e)
+                } else {
+                    MinusExpr(visit(e))
+                }
             } else {
                 literalVisitor.visit(ctx.literals())
             }
