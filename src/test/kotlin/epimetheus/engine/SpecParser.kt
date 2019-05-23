@@ -12,23 +12,32 @@ import java.util.*
 interface SpecValue {
     val repeat: Int
     fun expand(currentValue: Double?): List<Double?>
+    fun repeatCount(): Int {
+        return 1 + repeat
+    }
 }
 
 data class VNumber(val initial: Double, val delta: Double, override val repeat: Int) : SpecValue {
     override fun expand(currentValue: Double?): List<Double?> {
-        return List(repeat + 1) { initial + it * delta }
+        var k = initial
+        val ret = mutableListOf(k)
+        for (i in 0 until repeat) {
+            k += delta
+            ret += k
+        }
+        return ret
     }
 }
 
 data class VStale(override val repeat: Int) : SpecValue {
     override fun expand(currentValue: Double?): List<Double?> {
-        return List(repeat + 1) { Mat.StaleValue }
+        return List(repeatCount()) { Mat.StaleValue }
     }
 }
 
 data class VBlank(override val repeat: Int) : SpecValue {
     override fun expand(currentValue: Double?): List<Double?> {
-        return List(repeat + 1) { null }
+        return List(repeatCount()) { null }
     }
 }
 

@@ -1,5 +1,8 @@
 package epimetheus.model
 
+import java.util.*
+import kotlin.NoSuchElementException
+
 
 data class DoubleSlice(val values: DoubleArray, val begin: Int, val size: Int) {
     companion object {
@@ -173,7 +176,11 @@ data class LongSlice(val values: LongArray, val begin: Int, override val size: I
     }
 
     override fun indexOf(element: Long): Int {
-        TODO("not implemented")
+        val rawIdx = values.indexOf(element)
+        if (rawIdx < begin || rawIdx >= begin + size) {
+            return -1
+        }
+        return rawIdx - begin
     }
 
     override fun isEmpty(): Boolean {

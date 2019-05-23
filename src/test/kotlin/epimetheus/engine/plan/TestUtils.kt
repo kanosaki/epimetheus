@@ -31,13 +31,19 @@ object TestUtils {
         }
     }
 
-    fun assertRuntimeValueEquals(v1: RuntimeValue, v2: RuntimeValue, allowNonDetComparision: Boolean = false, prune: Boolean = false, msg: String = "") {
+    fun assertRuntimeValueEquals(v1: RuntimeValue, v2: RuntimeValue, allowNonDetComparision: Boolean = false, prune: Boolean = false, ordered: Boolean, msg: String = "") {
         if (v1 is RPointMatrix && v2 is RPointMatrix) {
+            var vv1 = v1
+            var vv2 = v2
             if (prune) {
-                assertRPointMatrixEquals(v1.prune(), v2.prune(), allowNonDetComparision, msg)
-            } else {
-                assertRPointMatrixEquals(v1, v2, allowNonDetComparision, msg)
+                vv1 = vv1.prune()
+                vv2 = vv2.prune()
             }
+            if (!ordered) {
+                vv1 = vv1.sortSeries()
+                vv2 = vv2.sortSeries()
+            }
+            assertRPointMatrixEquals(vv1, vv2, allowNonDetComparision, msg)
         } else if (v1 is RConstant && v2 is RConstant) {
             if (!compareDouble(v1.value, v2.value, allowNonDetComparision)) {
                 fail("value not equal: $v1 != $v2 (allowNonDetComparision=$allowNonDetComparision)")

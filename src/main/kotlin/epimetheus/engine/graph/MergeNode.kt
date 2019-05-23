@@ -11,14 +11,20 @@ import epimetheus.pkg.promql.InstantSelector
 import epimetheus.storage.IgniteGateway
 import kotlin.streams.toList
 
-abstract class MergeNode(val nodes: List<FixedInstantNode>) : FixedInstantNode {
+abstract class MergeNode() : FixedInstantNode {
+    abstract val nodes: List<FixedInstantNode>
     override val affinity: NodeAffinity = NodeAffinity.Splitted
 
-    override val metPlan: FixedMetric = FixedMetric(nodes.flatMap { it.metPlan.metrics })
+    override val metPlan: FixedMetric
+        get() = FixedMetric(nodes.flatMap { it.metPlan.metrics })
+
+    override fun reprNode(): String {
+        return "${this.javaClass.simpleName}(${if(affinity is NodeAffinity.Single) "uni" else "broad"})"
+    }
 }
 
 // selectorHint is used when evaluation 'absent' function
-class MergePointNode(nodes: List<FixedInstantNode>, val selectorHint: InstantSelector? = null) : MergeNode(nodes) {
+data class MergePointNode(override val nodes: List<FixedInstantNode>, val selectorHint: InstantSelector? = null) : MergeNode() {
     override fun evaluate(ec: ExecContext, eng: EngineContext): RuntimeValue {
         val vals = nodes.parallelStream().map {
             val aff = it.affinity
@@ -26,14 +32,14 @@ class MergePointNode(nodes: List<FixedInstantNode>, val selectorHint: InstantSel
                 val g = eng.gateway as IgniteGateway
                 g.affinityCall(aff.metric, RemoteExec(it, ec)) as RPointMatrix
             } else {
-                it.evaluate(ec, eng) as RPointMatrix
+                evalWithTrace(it, ec, eng) as RPointMatrix
             }
         }.toList()
         return RPointMatrix.merge(vals, ec.frames)
     }
 }
 
-class MergeRangeNode(nodes: List<FixedInstantNode>, val range: Long) : MergeNode(nodes) {
+data class MergeRangeNode(override val nodes: List<FixedInstantNode>, val range: Long) : MergeNode() {
     override fun evaluate(ec: ExecContext, eng: EngineContext): RuntimeValue {
         val vals = nodes.parallelStream().map {
             val aff = it.affinity
@@ -41,7 +47,7 @@ class MergeRangeNode(nodes: List<FixedInstantNode>, val range: Long) : MergeNode
                 val g = eng.gateway as IgniteGateway
                 g.affinityCall(aff.metric, RemoteExec(it, ec)) as RRangeMatrix
             } else {
-                it.evaluate(ec, eng) as RRangeMatrix
+                evalWithTrace(it, ec, eng) as RRangeMatrix
             }
         }.toList()
         return RRangeMatrix.merge(vals, ec.frames, range)

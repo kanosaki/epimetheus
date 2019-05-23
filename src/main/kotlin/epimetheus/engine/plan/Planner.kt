@@ -265,11 +265,19 @@ data class RPointMatrix(override val metrics: List<Metric>, val series: List<RPo
         val rows = Array(metrics.size) { i ->
             Row(metrics[i], series[i])
         }
-        if (desc) {
-            rows.sortByDescending { it.s.values[it.s.values.size - 1] }
-        } else {
-            rows.sortBy { it.s.values[it.s.values.size - 1] }
+        val comparator = Comparator<Row> { o1, o2 ->
+            val sign = if (desc) -1 else 1
+            val v1 = o1.s.values[o1.s.values.size - 1]
+            val v2 = o2.s.values[o2.s.values.size - 1]
+            if (!v1.isFinite()) {
+                1
+            } else if (!v2.isFinite()) {
+                -1
+            } else {
+                sign * v1.compareTo(v2)
+            }
         }
+        rows.sortWith(comparator)
         return RPointMatrix(rows.map { it.m }, rows.map { it.s }, frames, offset)
     }
 
@@ -289,23 +297,24 @@ data class RPointMatrix(override val metrics: List<Metric>, val series: List<RPo
             return Table.create(tableName)
         }
 
-        val values = series.map { it.values.toList() }
-        val timestamps: List<Long> = if (series.isNotEmpty()) {
-            val sampleTs = series[0].timestamps
-            if (series.all { it.timestamps == sampleTs }) {
-                sampleTs
-            } else {
-                TODO("implement")
-            }
-        } else {
-            listOf()
-        }
+        val timestamps = series.flatMap { it.timestamps }.toSortedSet().toList()
 
         val cols = Array<Column<*>>(timestamps.size + 1) { i ->
             if (i == 0) {
                 StringColumn.create(mkUniqueName("metric"), metrics.map { it.toString() })
             } else {
-                StringColumn.create(mkUniqueName(timestamps[i - 1].toString()), values.map { Mat.formatValue(it[i - 1]) })
+                val ts = timestamps[i - 1]
+                StringColumn.create(
+                        mkUniqueName(ts.toString()),
+                        series.map {
+                            val valIdx = it.timestamps.indexOf(ts)
+                            if (valIdx >= 0) {
+                                Mat.formatValue(it.values[valIdx])
+                            } else {
+                                "-" // not found
+                            }
+                        }
+                )
             }
         }
         return Table.create(tableName, *cols)

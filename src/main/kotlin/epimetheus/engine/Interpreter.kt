@@ -7,10 +7,11 @@ import epimetheus.pkg.promql.PromQL
 import epimetheus.storage.Gateway
 import org.antlr.v4.runtime.CharStreams
 
+@Deprecated("Use Engine instead")
 class Interpreter(val storage: Gateway, private val slowQueryThreshould: Long? = null) {
     fun eval(query: String, frames: TimeFrames): Value {
         val ast = PromQL.parse(CharStreams.fromString(query))!!
-        val tracer = if (slowQueryThreshould != null) TimingTracer() else Tracer.empty
+        val tracer = if (slowQueryThreshould != null) TimingInterpreterTracer() else InterpreterTracer.empty
         tracer.markBegin()
         val res = evalAst(ast, frames, tracer)
         tracer.markEnd()
@@ -21,7 +22,7 @@ class Interpreter(val storage: Gateway, private val slowQueryThreshould: Long? =
         return res
     }
 
-    fun evalAst(query: Expression, frames: TimeFrames, tracer: Tracer = Tracer.empty): Value {
+    fun evalAst(query: Expression, frames: TimeFrames, tracer: InterpreterTracer = InterpreterTracer.empty): Value {
         val evalCtx = Eval(frames, storage, tracer)
         return evalCtx.eval(query)
     }

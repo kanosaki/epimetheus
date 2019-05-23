@@ -41,8 +41,6 @@ object PromQL {
         }
 
         override fun visitFloatLiteral(ctx: PromQLParser.FloatLiteralContext?): Double? {
-            val i = ctx!!.Inf()
-            val n = ctx.NaN()
             return when {
                 ctx!!.NaN() != null -> Double.NaN
                 ctx.Inf() != null -> Double.POSITIVE_INFINITY
@@ -57,7 +55,11 @@ object PromQL {
                 return NumberLiteral(numberLiteralVisitor.visit(ctx.numberLiteral())!!)
             }
             if (ctx.stringLiteral() != null) {
-                return StringLiteral(ctx.text.trim('"'))
+                return when (ctx.text[0]) {
+                    '"' -> StringLiteral(ctx.text.trim('"'))
+                    '\'' -> StringLiteral(ctx.text.trim('\''))
+                    else -> throw RuntimeException("Never here")
+                }
             }
             throw RuntimeException("Never here")
         }

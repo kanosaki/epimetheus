@@ -16,14 +16,12 @@ import org.openjdk.jmh.annotations.State;
 
 @State(Scope.Thread)
 public class EvalAst {
-    private Interpreter interp;
     private Engine engine;
     private Gateway gateway;
     private Expression[] exprs;
 
     public EvalAst() {
         gateway = new MockGateway();
-        interp = new Interpreter(gateway, 1000L);
         engine = new Engine(gateway, 1000L);
 
         String[] codes = new String[] {
@@ -54,52 +52,34 @@ public class EvalAst {
     }
 
     @Benchmark
-    public void simplePlusInterp() {
-        interp.evalAst(exprs[1], TimeFrames.Companion.instant(1), Tracer.Companion.getEmpty());
-    }
-
-    @Benchmark
     public void simplePlusEngine() {
-        engine.evalAst(exprs[1], TimeFrames.Companion.instant(1), Tracer.Companion.getEmpty());
+        ExecContext ec = new ExecContext(TimeFrames.Companion.instant(1), NopTracer.INSTANCE);
+        engine.evalAst(exprs[1], ec);
     }
 
-    @Benchmark
-    public void selectorPlusInterp() {
-        interp.evalAst(exprs[2], TimeFrames.Companion.instant(100), Tracer.Companion.getEmpty());
-    }
 
     @Benchmark
     public void selectorPlusEngine() {
-        engine.evalAst(exprs[2], TimeFrames.Companion.instant(100), Tracer.Companion.getEmpty());
+        ExecContext ec = new ExecContext(TimeFrames.Companion.instant(1), NopTracer.INSTANCE);
+        engine.evalAst(exprs[2], ec);
     }
 
-    @Benchmark
-    public void rateInterp() {
-        interp.evalAst(exprs[3], TimeFrames.Companion.instant(100), Tracer.Companion.getEmpty());
-    }
 
     @Benchmark
     public void rateEngine() {
-        engine.evalAst(exprs[3], TimeFrames.Companion.instant(100), Tracer.Companion.getEmpty());
-    }
-
-    @Benchmark
-    public void maxByInterp() {
-        interp.evalAst(exprs[4], TimeFrames.Companion.instant(100), Tracer.Companion.getEmpty());
+        ExecContext ec = new ExecContext(TimeFrames.Companion.instant(1), NopTracer.INSTANCE);
+        engine.evalAst(exprs[3], ec);
     }
 
     @Benchmark
     public void maxByEngine() {
-        engine.evalAst(exprs[4], TimeFrames.Companion.instant(100), Tracer.Companion.getEmpty());
-    }
-
-    @Benchmark
-    public void maxRateInterp() {
-        interp.evalAst(exprs[5], TimeFrames.Companion.instant(100), Tracer.Companion.getEmpty());
+        ExecContext ec = new ExecContext(TimeFrames.Companion.instant(1), NopTracer.INSTANCE);
+        engine.evalAst(exprs[4], ec);
     }
 
     @Benchmark
     public void maxRateEngine() {
-        engine.evalAst(exprs[5], TimeFrames.Companion.instant(100), Tracer.Companion.getEmpty());
+        ExecContext ec = new ExecContext(TimeFrames.Companion.instant(1), NopTracer.INSTANCE);
+        engine.evalAst(exprs[5], ec);
     }
 }

@@ -11,8 +11,12 @@ import epimetheus.pkg.promql.PromQLException
 data class ColumnMapAggregatorNode(override val metPlan: FixedMetric, val param: InstantNode, val fnName: String, val grouping: List<IntArray>?) : FixedInstantNode {
     override val affinity: NodeAffinity = NodeAffinity.Splitted
 
+    override fun reprNode(): String {
+        return "$fnName(col-static)"
+    }
+
     override fun evaluate(ec: ExecContext, eng: EngineContext): RuntimeValue {
-        val p = param.evaluate(ec, eng)
+        val p = evalWithTrace(param, ec, eng)
         val agg = eng.aggregators[fnName] ?: throw PromQLException("aggregator $fnName not found")
         agg as? MappingAggregator ?: TODO("inconsistent aggregator")
         return agg.eval(ec, metPlan.metrics, listOf(p), grouping)
@@ -23,8 +27,12 @@ class ColumnMapAggregatorDynamicNode(val param: InstantNode, val fnName: String,
     override val metPlan: MetricPlan = VariableMetric
     override val affinity: NodeAffinity = NodeAffinity.Splitted
 
+    override fun reprNode(): String {
+        return "$fnName(col-dynamic, group=$group)"
+    }
+
     override fun evaluate(ec: ExecContext, eng: EngineContext): RuntimeValue {
-        val p = param.evaluate(ec, eng)
+        val p = evalWithTrace(param, ec, eng)
         val pm = p as? RPointMatrix ?: throw PromQLException("instant-vector expected but got ${p.javaClass}")
         val agg = eng.aggregators[fnName] ?: throw PromQLException("aggregator $fnName not found")
         agg as? MappingAggregator ?: TODO("inconsistent aggregator")
@@ -41,9 +49,13 @@ class VariadicAggregatorNode(val params: List<PlanNode>, val fnName: String, val
     override val metPlan: MetricPlan = VariableMetric
     override val affinity: NodeAffinity = NodeAffinity.Splitted
 
+    override fun reprNode(): String {
+        return "$fnName(variadic, group=$group)"
+    }
+
     override fun evaluate(ec: ExecContext, eng: EngineContext): RuntimeValue {
         val agg = eng.aggregators[fnName] ?: throw PromQLException("aggregator $fnName not found")
-        val args = params.map { it.evaluate(ec, eng) }
+        val args = params.map { evalWithTrace(it, ec, eng) }
         return when (agg) {
             is VariadicAggregator -> {
                 agg.eval(ec, args, group)

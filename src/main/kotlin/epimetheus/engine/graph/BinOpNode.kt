@@ -8,14 +8,13 @@ import epimetheus.engine.primitive.NumericBinOp
 import epimetheus.engine.primitive.SetBinOp
 import epimetheus.pkg.promql.PromQLException
 import epimetheus.pkg.promql.VectorMatching
-import java.lang.RuntimeException
 
 data class BinOpArithMatMatNode(override val metPlan: FixedMetric, val opMapping: List<IntArray>, val lhs: InstantNode, val rhs: InstantNode, val op: NumericBinOp) : FixedInstantNode {
     override val affinity: NodeAffinity = NodeAffinity.Splitted
 
     override fun evaluate(ec: ExecContext, eng: EngineContext): RuntimeValue {
-        val lv = lhs.evaluate(ec, eng)
-        val rv = rhs.evaluate(ec, eng)
+        val lv = evalWithTrace(lhs, ec, eng)
+        val rv = evalWithTrace(rhs, ec, eng)
         return when {
             lv is RPointMatrix && rv is RPointMatrix -> {
                 val series = opMapping.map { lrIdx ->
@@ -35,6 +34,10 @@ data class BinOpArithMatMatNode(override val metPlan: FixedMetric, val opMapping
             else -> throw PromQLException("$op is not defined between $lhs and $rhs")
         }
     }
+
+    override fun reprNode(): String {
+        return "BinOp(${op.name}, mat-mat, fixed)"
+    }
 }
 
 // Used when
@@ -47,8 +50,8 @@ data class BinOpDynamicNode(override val metPlan: MetricPlan, val lhs: InstantNo
     override val affinity: NodeAffinity = NodeAffinity.Splitted
 
     override fun evaluate(ec: ExecContext, eng: EngineContext): RuntimeValue {
-        val lv = lhs.evaluate(ec, eng)
-        val rv = rhs.evaluate(ec, eng)
+        val lv = evalWithTrace(lhs, ec, eng)
+        val rv = evalWithTrace(rhs, ec, eng)
         if (lv !is RPointMatrix || rv !is RPointMatrix) {
             throw PromQLException("$op is not defined between $lhs and $rhs")
         }
@@ -82,6 +85,10 @@ data class BinOpDynamicNode(override val metPlan: MetricPlan, val lhs: InstantNo
             else -> TODO("never here")
         }
     }
+
+    override fun reprNode(): String {
+        return "BinOp(${op.name}, mat-mat, dynamic($matching))"
+    }
 }
 
 data class BinOpArithScalarMatNode(override val metPlan: MetricPlan, val lhs: ScalarLiteralNode, val rhs: InstantNode, val op: NumericBinOp) : InstantNode {
@@ -89,7 +96,7 @@ data class BinOpArithScalarMatNode(override val metPlan: MetricPlan, val lhs: Sc
 
     override fun evaluate(ec: ExecContext, eng: EngineContext): RuntimeValue {
         val lv = lhs.value
-        val rv = rhs.evaluate(ec, eng)
+        val rv = evalWithTrace(rhs, ec, eng)
         return when (rv) {
             // inplace version sample
             //is RPointMatrix -> {
@@ -117,6 +124,11 @@ data class BinOpArithScalarMatNode(override val metPlan: MetricPlan, val lhs: Sc
             else -> throw PromQLException("$op is not defined between $lhs and $rhs")
         }
     }
+
+    override fun reprNode(): String {
+        val metstatus = if (metPlan is FixedMetric) "fixed" else "dynamic"
+        return "BinOp(${op.name}, scalar-mat, $metstatus, lhs=${lhs.value})"
+    }
 }
 
 data class BinOpArithMatScalarNode(override val metPlan: MetricPlan, val lhs: InstantNode, val rhs: ScalarLiteralNode, val op: NumericBinOp) : InstantNode {
@@ -124,7 +136,7 @@ data class BinOpArithMatScalarNode(override val metPlan: MetricPlan, val lhs: In
 
     override fun evaluate(ec: ExecContext, eng: EngineContext): RuntimeValue {
         val rv = rhs.value
-        val lv = lhs.evaluate(ec, eng)
+        val lv = evalWithTrace(lhs, ec, eng)
         return when (lv) {
             is RPointMatrix -> {
                 val metrics = when (metPlan) {
@@ -142,6 +154,11 @@ data class BinOpArithMatScalarNode(override val metPlan: MetricPlan, val lhs: In
             }
             else -> throw PromQLException("$op is not defined between $lhs and $rhs")
         }
+    }
+
+    override fun reprNode(): String {
+        val metstatus = if (metPlan is FixedMetric) "fixed" else "dynamic"
+        return "BinOp(${op.name}, mat-scalar, $metstatus, rhs=${rhs.value})"
     }
 }
 

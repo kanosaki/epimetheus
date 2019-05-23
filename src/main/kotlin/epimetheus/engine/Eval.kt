@@ -5,7 +5,7 @@ import epimetheus.pkg.promql.*
 import epimetheus.storage.Gateway
 import java.time.ZoneId
 
-class Eval(val frames: TimeFrames, val storage: Gateway, val tracer: Tracer = Tracer.empty) {
+class Eval(val frames: TimeFrames, val storage: Gateway, val tracer: InterpreterTracer = InterpreterTracer.empty) {
     fun eval(ast: Expression): Value {
         val node = DefaultEvalNode(this, null)
         return node.evalExpr(ast, 0)

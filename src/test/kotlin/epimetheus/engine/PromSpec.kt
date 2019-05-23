@@ -2,6 +2,7 @@ package epimetheus.engine
 
 import epimetheus.CacheName
 import epimetheus.engine.plan.RPointMatrix
+import epimetheus.engine.plan.RuntimeValue
 import epimetheus.model.*
 import epimetheus.pkg.promql.Expression
 import epimetheus.pkg.promql.PromQL
@@ -21,7 +22,6 @@ import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.TestFactory
 import org.junit.jupiter.api.fail
 import org.junit.jupiter.api.function.Executable
-import java.io.File
 import java.nio.file.Paths
 import java.time.Duration
 
@@ -29,28 +29,25 @@ import java.time.Duration
 // Interpreter / Evaluator
 interface TargetEngine {
     fun init(gateway: Gateway)
-    fun evalAst(ast: Expression, tf: TimeFrames, tracer: Tracer): Value
-}
-
-class InterpreterEngine() : TargetEngine {
-    lateinit var interpreter: Interpreter
-    override fun init(gateway: Gateway) {
-        interpreter = Interpreter(gateway)
-    }
-
-    override fun evalAst(ast: Expression, tf: TimeFrames, tracer: Tracer): Value {
-        return interpreter.evalAst(ast, tf, tracer)
-    }
+    fun evalAst(ast: Expression, tf: TimeFrames): RuntimeValue
+    fun printTrace()
 }
 
 class EvaluatorEngine() : TargetEngine {
     lateinit var evaluator: Engine
+    lateinit var tracer: LocalRecordTracer
     override fun init(gateway: Gateway) {
         evaluator = Engine(gateway)
     }
 
-    override fun evalAst(ast: Expression, tf: TimeFrames, tracer: Tracer): Value {
-        return evaluator.evalAst(ast, tf, tracer)
+    override fun evalAst(ast: Expression, tf: TimeFrames): RuntimeValue {
+        tracer = LocalRecordTracer()
+        val ec = ExecContext(tf, tracer)
+        return evaluator.evalAst(ast, ec)
+    }
+
+    override fun printTrace() {
+        tracer.printTrace(System.out)
     }
 }
 
@@ -61,7 +58,6 @@ class SpecContext(var interpreter: TargetEngine, val storageFactory: () -> Gatew
         storage = storageFactory()
         interpreter.init(storage)
     }
-
 }
 
 abstract class SpecCmd {
@@ -203,8 +199,7 @@ class PromSpec(val lines: List<String>, val context: SpecContext) : Executable {
             } else {
                 throw RuntimeException("offset required")
             }
-            val tracer = FullLoggingTracer()
-            val result = ctx.interpreter.evalAst(expr, tf, tracer)
+            val result = ctx.interpreter.evalAst(expr, tf)
             val expected = if (specs.isNotEmpty() && specs.all { it is SpecLiteralDesc }) {
                 assert(specs.size == 1 && specs[0].series.size == 1)
                 val vals = specs[0].series[0].expand(null)
@@ -214,15 +209,15 @@ class PromSpec(val lines: List<String>, val context: SpecContext) : Executable {
                 val series = specs.map {
                     it as SpecSeriesDesc
                     Metric.fromSrotedMap(it.m) to Mat.mapValue(it.expand(null))
-                }.sortedBy { it.first.fingerprint() }
+                }
                 GridMat(series.map { it.first }.toTypedArray(), tf, series.map { it.second })
             }
             try {
-                TestUtils.assertValueEquals(expected, result, true, true)
+                TestUtils.assertValueEquals(expected, result, allowNonDetComparsion = true, prune = true, ordered = ordered)
             } catch (e: AssertionError) {
                 // print executing status
                 println("====== Eval TRACE")
-                tracer.printTrace()
+                ctx.interpreter.printTrace()
                 println("====== Eval EXPECTED")
                 when (expected) {
                     is GridMat -> println(expected.toTable().printAll())
@@ -232,9 +227,7 @@ class PromSpec(val lines: List<String>, val context: SpecContext) : Executable {
                 }
                 println("====== Eval ACTUAL")
                 when (result) {
-                    is GridMat -> println(result.toTable().printAll())
                     is RPointMatrix -> println(result.toTable().printAll())
-                    is Scalar -> println("SCALAR ${result.value}")
                     else -> println("UNKNOWN Value type: ${result.javaClass}: $result")
                 }
                 throw e
@@ -261,6 +254,9 @@ class PromSpec(val lines: List<String>, val context: SpecContext) : Executable {
                         if (it.fail) {
                             try {
                                 it.eval(context)
+                                println("===== AST")
+                                println("===== TRACE")
+                                context.interpreter.printTrace()
                                 throw RuntimeException("not failed(should throw PromQLException) at eval_fail")
                             } catch (_: PromQLException) {
                             } catch (e: java.lang.AssertionError) {
@@ -282,21 +278,6 @@ class PromSpec(val lines: List<String>, val context: SpecContext) : Executable {
 
 object PromSpecTests {
     val specdir = Paths.get("src", "test", "resources", "epimetheus", "engine", "promspec", "prometheus").toFile()
-    /**
-     * Spec files ported from prometheus repository
-     */
-    @TestFactory
-    fun withMockStorageInterpreter(): Collection<DynamicTest> {
-        val files = specdir.listFiles()
-        return files.map {
-            it.inputStream().use { input ->
-                val lines = IOUtils.readLines(input, Charsets.UTF_8)
-                        .map { it.trim() }
-                val ctx = SpecContext(InterpreterEngine()) { MockGateway() }
-                DynamicTest.dynamicTest(it.name, PromSpec(lines, ctx))
-            }
-        }
-    }
 
     /**
      * Spec files ported from prometheus repository
@@ -317,35 +298,9 @@ object PromSpecTests {
 
     @Tag("slow")
     @TestFactory
-    fun withIgniteStorageInterpreter(): Collection<DynamicTest> {
-        val files = specdir.listFiles()
-        val conf = IgniteConfiguration().apply {
-            igniteInstanceName = "promspec"
-        }
-        // preload to measure test exec time accurately
-        Ignition.getOrStart(conf)
-        return files.map {
-            it.inputStream().use { input ->
-                val lines = IOUtils.readLines(input, Charsets.UTF_8)
-                        .map { it.trim() }
-                val ctx = SpecContext(InterpreterEngine()) {
-                    val ign = Ignition.getOrStart(conf)
-                    ign.destroyCache(CacheName.Prometheus.METRIC_META)
-                    ign.destroyCache(CacheName.Prometheus.FRESH_SAMPLES)
-                    IgniteGateway(ign)
-                }
-                DynamicTest.dynamicTest(it.name, PromSpec(lines, ctx))
-            }
-        }
-    }
-
-    @Tag("slow")
-    @TestFactory
     fun withIgniteStorageEngine(): Collection<DynamicTest> {
         val files = specdir.listFiles()
-        val conf = IgniteConfiguration().apply {
-            igniteInstanceName = "promspec"
-        }
+        val conf = IgniteConfiguration()
         // preload to measure test exec time accurately
         Ignition.getOrStart(conf)
         return files.map {

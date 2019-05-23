@@ -116,7 +116,7 @@ interface Aggregator {
             }
         }
 
-        val variadicAggregator = listOf(
+        private val variadicAggregator = listOf(
                 VariadicAggregator("topk") { ec, args, group ->
                     val ks = args[0] as RScalar
                     val m = args[1] as RPointMatrix
@@ -140,7 +140,7 @@ interface Aggregator {
                         if (k < 1.0) {
                             continue
                         }
-                        buckets.forEach { _, bucket ->
+                        buckets.forEach { (_, bucket) ->
                             for (metIdx in bucket.iterator()) {
                                 val v = m.series[metIdx].values[tsIdx]
                                 if (tops.size < k) {
@@ -165,7 +165,7 @@ interface Aggregator {
                             tops.clear()
                         }
                     }
-                    ret.prune()
+                    ret.sortSeriesByLastValue(true)
                 },
                 VariadicAggregator("bottomk") { ec, args, group ->
                     val k = args[0] as RScalar
@@ -186,7 +186,7 @@ interface Aggregator {
 
                     val ret = m.duplicate()
                     for (tsIdx in 0 until m.colCount) {
-                        buckets.forEach { _, bucket ->
+                        buckets.forEach { (_, bucket) ->
                             for (metIdx in bucket.iterator()) {
                                 val v = m.series[metIdx].values[tsIdx]
                                 if (tops.size < k.at(tsIdx)) {
@@ -208,7 +208,7 @@ interface Aggregator {
                             tops.clear()
                         }
                     }
-                    ret.prune()
+                    ret.sortSeriesByLastValue(false)
                 },
                 VariadicAggregator("count_values") { ec, args, group ->
                     val targetLabel = (args[0] as RString).value

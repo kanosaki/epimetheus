@@ -35,11 +35,11 @@ sourceCompatibility = 1.8
 
 ext {
     igniteVersion = "2.7+"
-    vertxVersion = "3.5+"
-    jacksonVersion = "2.9.+"
+    vertxVersion = "3.+"
+    jacksonVersion = "2.+"
     junit5JupiterVersion = "5.+"
     jmhVersion = '1.+'
-    kotlinArgparserVersion = '2.0.+'
+    kotlinArgparserVersion = '2.+'
 }
 
 repositories {

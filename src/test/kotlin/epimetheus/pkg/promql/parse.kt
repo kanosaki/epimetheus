@@ -72,9 +72,16 @@ class ParseTest {
                                 listOf(
                                         LabelMatch("__name__", "=~", str(".+"))
                                 ), Duration.ZERO),
+                "ceil({__name__=~'testmetric1|testmetric2'})" to
+                        FunctionCall(bind.functions["ceil"]!!, listOf(
+                                InstantSelector(
+                                        "",
+                                        listOf(LabelMatch("__name__", "=~", str("testmetric1|testmetric2"))),
+                                        Duration.ZERO
+                                )
+                        )),
                 "foo + bar" to
                         bin("+", vec("foo"), vec("bar")),
-
                 "foo + on (b) group_right(c) bar" to
                         BinaryCall(
                                 op("+"),

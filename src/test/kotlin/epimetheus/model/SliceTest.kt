@@ -55,4 +55,14 @@ class LongSliceTest {
             ds1[2]
         }
     }
+
+    @Test
+    fun testIndexOf() {
+        val origin = (0L..10).toList().toLongArray()
+        val ds1 = LongSlice(origin, 2, 2)
+        assertEquals(-1, ds1.indexOf(1))
+        assertEquals(0, ds1.indexOf(2))
+        assertEquals(1, ds1.indexOf(3))
+        assertEquals(-1, ds1.indexOf(4))
+    }
 }

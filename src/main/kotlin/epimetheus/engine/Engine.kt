@@ -14,11 +14,11 @@ class Engine(val storage: Gateway, private val slowQueryThreshould: Long? = null
     val ctx = EngineContext.builtin(storage, if (storage is IgniteGateway) storage.ignite else null)
 
     fun exec(query: String, frames: TimeFrames): RuntimeValue {
-        val tracer = if (slowQueryThreshould != null) TimingTracer() else Tracer.empty
-        val res =  execWithTracer(query, frames, tracer)
+        val tracer = if (slowQueryThreshould != null) SpanTracer() else NopTracer
+        val res = execWithTracer(query, frames, tracer)
         if (slowQueryThreshould != null && tracer.elapsedMs()!! > slowQueryThreshould) { // its a slow query
             println("Traced: ${tracer.elapsedMs()}(ms) $query")
-            tracer.printTrace()
+            tracer.printTrace(System.out)
         }
         return res
     }
@@ -27,13 +27,17 @@ class Engine(val storage: Gateway, private val slowQueryThreshould: Long? = null
         tracer.markBegin()
         tracer.onPhase("parse")
         val ast = PromQL.parse(CharStreams.fromString(query))!!
-        val res = evalAst(ast, frames, tracer)
+        val ec = ExecContext(frames, tracer)
+        val res = evalAst(ast, ec)
         tracer.markEnd()
         return res
     }
 
-    fun evalAst(query: Expression, frames: TimeFrames, tracer: Tracer = Tracer.empty): RuntimeValue {
+    fun evalAst(query: Expression, ec: ExecContext): RuntimeValue {
+        ec.tracer.markBegin()
         val executor = Exec(storage, ctx, planner)
-        return executor.queryRange(query, frames, tracer)
+        val res = executor.queryRange(query, ec)
+        ec.tracer.markEnd()
+        return res
     }
 }

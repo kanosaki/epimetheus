@@ -1,6 +1,5 @@
 package epimetheus.model
 
-import epimetheus.engine.plan.RPointMatrix
 import epimetheus.engine.plan.RuntimeValue
 import epimetheus.engine.plan.TestUtils
 import epimetheus.engine.plan.TestUtils.toRuntimeValue
@@ -10,7 +9,7 @@ import kotlin.test.fail
 object TestUtils {
     const val DOUBLE_COMPARE_DELTA = 1e-6
 
-    fun assertValueEquals(m1: Value, m2: Value, allowNonDetComparsion: Boolean = false, prune: Boolean = false, msg: String = "") {
+    fun assertValueEquals(m1: Value, m2: Value, allowNonDetComparsion: Boolean = false, prune: Boolean = false, ordered: Boolean = false, msg: String = "") {
         var v1 = m1
         var v2 = m2
         if (v1 !is RuntimeValue) {
@@ -19,7 +18,7 @@ object TestUtils {
         if (v2 !is RuntimeValue) {
             v2 = toRuntimeValue(v2)
         }
-        TestUtils.assertRuntimeValueEquals(v1, v2, allowNonDetComparsion, prune, msg)
+        TestUtils.assertRuntimeValueEquals(v1, v2, allowNonDetComparsion, prune, ordered, msg)
 //        if (m1 is RuntimeValue && m2 is RuntimeValue) {
 //        } else if(m1 is GridMat && m2 is RPointMatrix) { // temporal for compatibility
 //            fail("impl1")
