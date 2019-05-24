@@ -134,7 +134,7 @@ interface Aggregator {
                         }
                     }
 
-                    val ret = m.duplicate()
+                    val retBuilder = RPointMatrixBuilder(m.frames, m.offset)
                     for (tsIdx in 0 until m.colCount) {
                         val k = ks.at(tsIdx)
                         if (k < 1.0) {
@@ -157,15 +157,14 @@ interface Aggregator {
                             }
                             val topMets = tops.values
                             for (metIdx in bucket.iterator()) {
-                                if (!topMets.contains(metIdx)) {
-                                    // TODO: fix this dirty hack
-                                    ret.series[metIdx].values.write(tsIdx, Mat.StaleValue)
+                                if (topMets.contains(metIdx)) {
+                                    retBuilder.add(m.metrics[metIdx], m.series[metIdx])
                                 }
                             }
                             tops.clear()
                         }
                     }
-                    ret.sortSeriesByLastValue(true)
+                    retBuilder.sortByValue(true).build()
                 },
                 VariadicAggregator("bottomk") { ec, args, group ->
                     val k = args[0] as RNumber
@@ -184,7 +183,7 @@ interface Aggregator {
                         }
                     }
 
-                    val ret = m.duplicate()
+                    val retBuilder = RPointMatrixBuilder(m.frames, m.offset)
                     for (tsIdx in 0 until m.colCount) {
                         buckets.forEach { (_, bucket) ->
                             for (metIdx in bucket.iterator()) {
@@ -201,14 +200,14 @@ interface Aggregator {
                             }
                             val topMets = tops.values
                             for (metIdx in bucket.iterator()) {
-                                if (!topMets.contains(metIdx)) {
-                                    ret.series[metIdx].values.write(tsIdx, Mat.StaleValue)
+                                if (topMets.contains(metIdx)) {
+                                    retBuilder.add(m.metrics[metIdx], m.series[metIdx])
                                 }
                             }
                             tops.clear()
                         }
                     }
-                    ret.sortSeriesByLastValue(false)
+                    retBuilder.sortByValue(false).build()
                 },
                 VariadicAggregator("count_values") { ec, args, group ->
                     val targetLabel = (args[0] as RString).value

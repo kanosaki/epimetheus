@@ -166,6 +166,48 @@ data class RRangeMatrix(override val metrics: List<Metric>, val chunks: List<RRa
     }
 }
 
+class RPointMatrixBuilder(var frames: TimeFrames, var offset: Long = 0) {
+    private val metrics = mutableListOf<Metric>()
+    private val series = mutableListOf<RPoints>()
+    private var sortByValueDesc: Boolean? = null
+
+    fun add(met: Metric, ser: RPoints): RPointMatrixBuilder {
+        metrics.add(met)
+        series.add(ser)
+        return this
+    }
+
+    fun sortByValue(desc: Boolean): RPointMatrixBuilder {
+        sortByValueDesc = desc
+        return this
+    }
+
+    fun build(): RPointMatrix {
+        val sbvd = sortByValueDesc
+        if (sbvd != null) {
+            class Row(val m: Metric, val s: RPoints)
+
+            val rows = Array(metrics.size) { i ->
+                Row(metrics[i], series[i])
+            }
+            val comparator = Comparator<Row> { o1, o2 ->
+                val sign = if (sbvd) -1 else 1
+                val v1 = o1.s.values[o1.s.values.size - 1]
+                val v2 = o2.s.values[o2.s.values.size - 1]
+                if (!v1.isFinite()) {
+                    1
+                } else if (!v2.isFinite()) {
+                    -1
+                } else {
+                    sign * v1.compareTo(v2)
+                }
+            }
+            rows.sortWith(comparator)
+        }
+        return RPointMatrix(metrics, series, frames, offset)
+    }
+}
+
 data class RPointMatrix(override val metrics: List<Metric>, val series: List<RPoints>, val frames: TimeFrames, override val offset: Long = 0) : RData {
     init {
         assert(metrics.size == series.size)

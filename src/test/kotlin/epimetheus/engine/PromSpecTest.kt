@@ -64,7 +64,7 @@ class PromSpecTest {
 
         val cases = listOf(
                 AssertCase("a", listOf(0.0, 1.0, 2.0, 3.0, 10.0, 12.0, 14.0, 16.0, 1.0, 1.0, 1.0, 1.0)),
-                AssertCase("c", listOf(0.0, 10.0, 20.0, 30.0, 40.0))
+                AssertCase("c", listOf(0.0, 10.0, 20.0, 30.0, 40.0, 50.0)) // TODO: is this correct? (having 50.0 is OK?)
         )
         cases.forEach { case ->
             val met = Metric.of(case.metric)

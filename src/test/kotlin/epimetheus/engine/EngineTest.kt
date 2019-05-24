@@ -125,10 +125,18 @@ class EngineTest {
                                 Metric.of("c" to "2") to listOf(7.0 / 2.0)
                         )
                 ),
-                Param("topk(1, a)",
+                Param("topk(2, a)",
                         TimeFrames.instant(0),
                         RPointMatrix.of(TimeFrames.instant(0),
-                                Metric.of("a", "b" to "2", "c" to "2") to listOf(4.0)
+                                Metric.of("a", "b" to "2", "c" to "2") to listOf(4.0),
+                                Metric.of("a", "b" to "1", "c" to "2") to listOf(3.0)
+                        )
+                ),
+                Param("bottomk(2, a)",
+                        TimeFrames.instant(0),
+                        RPointMatrix.of(TimeFrames.instant(0),
+                                Metric.of("a", "b" to "1", "c" to "1") to listOf(1.0),
+                                Metric.of("a", "b" to "2", "c" to "1") to listOf(2.0)
                         )
                 )
         )
