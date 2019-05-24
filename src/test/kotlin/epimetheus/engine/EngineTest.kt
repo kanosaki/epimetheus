@@ -2,7 +2,6 @@ package epimetheus.engine
 
 import epimetheus.engine.plan.RConstant
 import epimetheus.engine.plan.RPointMatrix
-import epimetheus.engine.plan.RScalar
 import epimetheus.model.Metric
 import epimetheus.model.TestUtils.assertValueEquals
 import epimetheus.model.TimeFrames

@@ -152,12 +152,12 @@ interface Function {
                 },
                 MapFunction("clamp_max") { _, args ->
                     val m = args[0] as RPointMatrix
-                    val p = args[1] as RScalar
+                    val p = args[1] as RNumber
                     m.mapValues { d, _, idx -> Math.min(d, p.at(idx)) }
                 },
                 MapFunction("clamp_min") { _, args ->
                     val m = args[0] as RPointMatrix
-                    val p = args[1] as RScalar
+                    val p = args[1] as RNumber
                     m.mapValues { d, _, idx -> Math.max(d, p.at(idx)) }
                 },
                 MapFunction("count_over_time") { ctx, args ->
@@ -187,8 +187,8 @@ interface Function {
                 },
                 MapFunction("holt_winters") { ctx, args ->
                     val m = args[0] as RRangeMatrix
-                    val sfs = args[1] as RScalar // smoothing factor
-                    val tfs = args[2] as RScalar // trend factor
+                    val sfs = args[1] as RNumber // smoothing factor
+                    val tfs = args[2] as RNumber // trend factor
 
                     fun calcTrendValues(i: Int, s0: Double, s1: Double, b: Double): Double {
                         if (i == 0) {
@@ -254,40 +254,32 @@ interface Function {
                 MapFunction("max_over_time") { ctx, args ->
                     val m = args[0] as RRangeMatrix
                     m.unify { _, _, _, vs ->
-                        var ret: Double? = null
+                        var ret: Double = Mat.StaleValue
                         // Mat.StaleValue is a NaN but vs.max() returns NaN if there is any NaN.
                         for (v in vs) {
-                            if (!Mat.isStale(v)) {
-                                if (ret == null) {
-                                    ret = v
-                                } else if (v > ret) {
-                                    ret = v
-                                }
+                            if (ret.isNaN() || v > ret) {
+                                ret = v
                             }
                         }
-                        ret ?: Mat.StaleValue
+                        ret
                     }
                 },
                 MapFunction("min_over_time") { ctx, args ->
                     val m = args[0] as RRangeMatrix
                     m.unify { _, _, _, vs ->
-                        var ret: Double? = null
+                        var ret: Double = Mat.StaleValue
                         // Mat.StaleValue is a NaN but vs.max() returns NaN if there is any NaN.
                         for (v in vs) {
-                            if (!Mat.isStale(v)) {
-                                if (ret == null) {
-                                    ret = v
-                                } else if (v < ret!!) { // why !! needs here?
-                                    ret = v
-                                }
+                            if (ret.isNaN() || v < ret) {
+                                ret = v
                             }
                         }
-                        ret ?: Mat.StaleValue
+                        ret
                     }
                 },
                 MapFunction("predict_linear") { ctx, args ->
                     val m = args[0] as RRangeMatrix
-                    val s = args[1] as RScalar
+                    val s = args[1] as RNumber
                     m.unify { idx, ts, timestamps, values ->
                         val res = linearRegression(values, timestamps, ts)
                         val slope = res[0]
@@ -296,7 +288,7 @@ interface Function {
                     }
                 },
                 MapFunction("quantile_over_time", mainParamIndex = 1) { ctx, args ->
-                    val q = args[0] as RScalar
+                    val q = args[0] as RNumber
                     val m = args[1] as RRangeMatrix
                     m.unify { idx, _, _, values ->
                         if (values.isEmpty()) {
@@ -476,7 +468,7 @@ interface Function {
                     }
 
                     override fun eval(ec: ExecContext, metrics: MetricPlan, args: List<RuntimeValue>, params: List<PlanNode>): RuntimeValue {
-                        val arg = args[0] as RScalar
+                        val arg = args[0] as RNumber
                         return RPointMatrix(listOf(Metric.empty), listOf(RPoints.init(ec.frames) { i, _ -> arg.at(i) }), ec.frames)
                     }
                 },
@@ -490,7 +482,7 @@ interface Function {
                     override fun eval(ec: ExecContext, metrics: MetricPlan, args: List<RuntimeValue>, params: List<PlanNode>): RuntimeValue {
                         val m = args[0] as RPointMatrix
                         return if (m.series.size == 1) {
-                            RScalarVector(m.series[0].values)
+                            RNumberVector(m.series[0].values)
                         } else {
                             RConstant(Double.NaN)
                         }
@@ -504,33 +496,57 @@ interface Function {
                     }
 
                     override fun eval(ec: ExecContext, metrics: MetricPlan, args: List<RuntimeValue>, params: List<PlanNode>): RuntimeValue {
-                        val qs = args[0] as RScalar
+                        val qs = args[0] as RNumber
                         val m = args[1] as RPointMatrix
 
-                        data class Bucket(val upperBound: Double, val count: Double)
+                        data class Bucket(val upperBound: Double, var count: Double)
                         data class MetricWithBuckets(val metric: Metric, val buckets: MutableList<Bucket>)
 
-                        fun bucketQuantile(q: Double, buckets: MutableList<Bucket>): Double {
+                        fun coalesceBuckets(buckets: MutableList<Bucket>): MutableList<Bucket> {
+                            var last = buckets.first()
+                            var i = 0
+                            for (j in 1 until buckets.size) {
+                                val b = buckets[j]
+                                if (b.upperBound == last.upperBound) {
+                                    last.count += b.count
+                                } else {
+                                    buckets[i] = last
+                                    last = b
+                                    i++
+                                }
+                            }
+                            buckets[i] = last
+                            return buckets.subList(0, i + 1)
+                        }
+
+                        fun ensureMonotonic(buckets: MutableList<Bucket>) {
+                            var max = buckets.first().count
+                            for (i in 1 until buckets.size) {
+                                when {
+                                    buckets[i].count > max -> max = buckets[i].count
+                                    buckets[i].count < max -> buckets[i] = Bucket(buckets[i].upperBound, max)
+                                }
+                            }
+                        }
+
+                        fun bucketQuantile(q: Double, originBuckets: MutableList<Bucket>): Double {
                             if (q < 0) {
                                 return Double.NEGATIVE_INFINITY
                             }
                             if (q > 1) {
                                 return Double.POSITIVE_INFINITY
                             }
+                            originBuckets.sortBy { it.upperBound }
+                            val lastUpperBound = originBuckets.last().upperBound
+                            if (!lastUpperBound.isInfinite() && lastUpperBound < 0) {
+                                return Double.NaN
+                            }
+
+                            val buckets = coalesceBuckets(originBuckets)
+                            ensureMonotonic(buckets)
                             if (buckets.size < 2) {
                                 return Double.NaN
                             }
-                            buckets.sortBy { it.upperBound }
-                            fun ensureMonotonic(buckets: MutableList<Bucket>) {
-                                var max = buckets.first().count
-                                for (i in 1 until buckets.size) {
-                                    when {
-                                        buckets[i].count > max -> max = buckets[i].count
-                                        buckets[i].count < max -> buckets[i] = Bucket(buckets[i].upperBound, max)
-                                    }
-                                }
-                            }
-                            ensureMonotonic(buckets)
                             var rank = q * buckets.last().count
                             val b = buckets.indexOfFirst { it.count >= rank } // TODO: binary search
                             if (b == buckets.size - 1) {

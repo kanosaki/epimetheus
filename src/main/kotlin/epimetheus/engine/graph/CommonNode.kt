@@ -99,7 +99,7 @@ data class BoolConvertNode(
         val v = evalWithTrace(value, ec, eng)
         return when (v) {
             is RConstant -> RConstant(ValueUtils.boolConvert(v.value))
-            is RScalarVector -> RScalarVector(v.values.mapCopy { _, d -> ValueUtils.boolConvert(d) })
+            is RNumberVector -> RNumberVector(v.values.mapCopy { _, d -> ValueUtils.boolConvert(d) })
             is RPointMatrix -> {
                 val m = v.mapValues { d, _, _ ->
                     ValueUtils.boolConvert(d)

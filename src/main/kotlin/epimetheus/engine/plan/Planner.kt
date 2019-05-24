@@ -85,17 +85,17 @@ interface RuntimeValue : Value { //temp name
 
 }
 
-interface RScalar : RuntimeValue {
+interface RNumber : RuntimeValue {
     fun at(idx: Int): Double
 }
 
-data class RConstant(val value: Double) : RScalar {
+data class RConstant(val value: Double) : RNumber {
     override fun at(idx: Int): Double {
         return value
     }
 }
 
-data class RScalarVector(val values: DoubleSlice) : RScalar {
+data class RNumberVector(val values: DoubleSlice) : RNumber {
     override fun at(idx: Int): Double {
         return values[idx]
     }

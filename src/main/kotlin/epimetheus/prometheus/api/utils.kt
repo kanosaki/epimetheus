@@ -2,7 +2,6 @@ package epimetheus.prometheus.api
 
 import epimetheus.engine.plan.RConstant
 import epimetheus.engine.plan.RPointMatrix
-import epimetheus.engine.plan.RScalar
 import epimetheus.engine.plan.RString
 import epimetheus.model.GridMat
 import epimetheus.model.Scalar
@@ -99,7 +98,7 @@ object Util {
             is RString -> {
                 Result("string", v.value)
             }
-            // TODO: support RScalarVector?
+            // TODO: support RNumberVector?
             else -> {
                 throw RuntimeException("never here")
             }

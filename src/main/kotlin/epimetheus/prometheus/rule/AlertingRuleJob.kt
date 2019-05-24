@@ -3,7 +3,6 @@ package epimetheus.prometheus.rule
 import epimetheus.engine.Engine
 import epimetheus.engine.plan.RConstant
 import epimetheus.engine.plan.RPointMatrix
-import epimetheus.engine.plan.RScalar
 import epimetheus.job.JobExitStatus
 import epimetheus.job.JobRunnable
 import epimetheus.model.Metric
@@ -26,7 +25,7 @@ class AlertingRuleJob(val key: RuleKey, val rule: AlertingRule) : JobRunnable {
                     alertingMetrics.add(Metric.empty)
                 }
             }
-            // TODO: support RScalarVector?
+            // TODO: support RNumberVector?
             is RPointMatrix -> {
                 for (i in 0 until v.rowCount) {
                     val series = v.series[i]

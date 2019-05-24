@@ -118,7 +118,7 @@ interface Aggregator {
 
         private val variadicAggregator = listOf(
                 VariadicAggregator("topk") { ec, args, group ->
-                    val ks = args[0] as RScalar
+                    val ks = args[0] as RNumber
                     val m = args[1] as RPointMatrix
                     val tops = Double2IntArrayMap(m.rowCount)
                     val buckets = Long2ObjectOpenHashMap<AbstractIntSet>(m.metrics.size)
@@ -168,7 +168,7 @@ interface Aggregator {
                     ret.sortSeriesByLastValue(true)
                 },
                 VariadicAggregator("bottomk") { ec, args, group ->
-                    val k = args[0] as RScalar
+                    val k = args[0] as RNumber
                     val m = args[1] as RPointMatrix
                     val tops = Double2IntArrayMap(m.rowCount)
                     val buckets = Long2ObjectOpenHashMap<AbstractIntSet>(m.metrics.size)
@@ -254,7 +254,7 @@ interface Aggregator {
                     RPointMatrix(metrics, series, ec.frames)
                 },
                 VariadicAggregator("quantile") { ec, args, group ->
-                    val q = args[0] as RScalar
+                    val q = args[0] as RNumber
                     val pm = args[1] as RPointMatrix
                     val timestamps = LongSlice.wrap(ec.frames.toLongArray())
                     fun quantileFn(values: List<DoubleSlice>): DoubleSlice {
