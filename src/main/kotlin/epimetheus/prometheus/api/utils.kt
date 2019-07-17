@@ -1,8 +1,8 @@
 package epimetheus.prometheus.api
 
-import epimetheus.engine.plan.RConstant
-import epimetheus.engine.plan.RPointMatrix
-import epimetheus.engine.plan.RString
+import epimetheus.model.RConstant
+import epimetheus.model.RPointMatrix
+import epimetheus.model.RString
 import epimetheus.model.GridMat
 import epimetheus.model.Scalar
 import epimetheus.model.StringValue

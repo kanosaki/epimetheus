@@ -1,7 +1,7 @@
 package epimetheus.engine
 
 import epimetheus.engine.plan.Planner
-import epimetheus.engine.plan.RuntimeValue
+import epimetheus.model.RuntimeValue
 import epimetheus.model.TimeFrames
 import epimetheus.pkg.promql.Expression
 import epimetheus.pkg.promql.PromQL

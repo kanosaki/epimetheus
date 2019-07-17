@@ -6,6 +6,7 @@ import epimetheus.engine.primitive.BOp
 import epimetheus.engine.primitive.NumericBinOp
 import epimetheus.engine.primitive.SetBinOp
 import epimetheus.model.Metric
+import epimetheus.model.MetricComparator
 import epimetheus.pkg.promql.BinaryCall
 import epimetheus.pkg.promql.PromQLException
 import epimetheus.pkg.promql.VectorMatching
@@ -157,12 +158,19 @@ class BinOpPlanner(val binding: Map<String, BOp>) {
                         insertedSigs.add(insertSig)
                     }
                 }
-                if (sideSwapped) {// TODO: check, not adopted eval version, but we should re-swap here
-                    metMatching.add(intArrayOf(rs, i))
+                val matchPair = if (sideSwapped) {// TODO: check, not adopted eval version, but we should re-swap here
+                    intArrayOf(rs, i)
                 } else {
-                    metMatching.add(intArrayOf(i, rs))
+                    intArrayOf(i, rs)
                 }
-                resultMetrics.add(metric)
+                val insertIdx = resultMetrics.binarySearch(metric, MetricComparator)
+                if (insertIdx < 0) {
+                    metMatching.add(insertIdx.inv(), matchPair)
+                    resultMetrics.add(insertIdx.inv(), metric)
+                } else {
+                    metMatching.add(matchPair)
+                    resultMetrics.add(metric)
+                }
             }
             return resultMetrics to metMatching
         }

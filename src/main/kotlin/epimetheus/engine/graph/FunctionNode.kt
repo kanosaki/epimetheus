@@ -4,7 +4,7 @@ import epimetheus.engine.EngineContext
 import epimetheus.engine.ExecContext
 import epimetheus.engine.plan.FixedMetric
 import epimetheus.engine.plan.MetricPlan
-import epimetheus.engine.plan.RuntimeValue
+import epimetheus.model.RuntimeValue
 
 
 data class FixedFunctionNode(val fnName: String, override val metPlan: FixedMetric, val params: List<PlanNode>, override val affinity: NodeAffinity) : FixedInstantNode {

@@ -4,9 +4,9 @@ import epimetheus.engine.EngineContext
 import epimetheus.engine.ExecContext
 import epimetheus.engine.RemoteExec
 import epimetheus.engine.plan.FixedMetric
-import epimetheus.engine.plan.RPointMatrix
-import epimetheus.engine.plan.RRangeMatrix
-import epimetheus.engine.plan.RuntimeValue
+import epimetheus.model.RPointMatrix
+import epimetheus.model.RRangeMatrix
+import epimetheus.model.RuntimeValue
 import epimetheus.pkg.promql.InstantSelector
 import epimetheus.storage.IgniteGateway
 import kotlin.streams.toList

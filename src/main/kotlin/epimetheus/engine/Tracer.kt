@@ -2,8 +2,8 @@ package epimetheus.engine
 
 import epimetheus.engine.graph.PlanNode
 import epimetheus.engine.graph.RootNode
-import epimetheus.engine.plan.RPointMatrix
-import epimetheus.engine.plan.RuntimeValue
+import epimetheus.model.RPointMatrix
+import epimetheus.model.RuntimeValue
 import java.io.PrintStream
 import java.io.Serializable
 import java.time.Instant

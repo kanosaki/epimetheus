@@ -3,7 +3,9 @@ package epimetheus.engine.primitive
 import epimetheus.EpimetheusException
 import epimetheus.engine.ExecContext
 import epimetheus.engine.graph.*
-import epimetheus.engine.plan.*
+import epimetheus.engine.plan.FixedMetric
+import epimetheus.engine.plan.MetricPlan
+import epimetheus.engine.plan.VariableMetric
 import epimetheus.model.*
 import epimetheus.pkg.promql.PromQLException
 import epimetheus.pkg.promql.Utils

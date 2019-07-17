@@ -1,6 +1,5 @@
 package epimetheus.model
 
-import epimetheus.engine.plan.RuntimeValue
 import epimetheus.engine.plan.TestUtils
 import epimetheus.engine.plan.TestUtils.toRuntimeValue
 import kotlin.test.assertEquals
@@ -10,35 +9,10 @@ object TestUtils {
     const val DOUBLE_COMPARE_DELTA = 1e-6
 
     fun assertValueEquals(m1: Value, m2: Value, allowNonDetComparsion: Boolean = false, prune: Boolean = false, ordered: Boolean = false, msg: String = "") {
-        var v1 = m1
-        var v2 = m2
-        if (v1 !is RuntimeValue) {
-            v1 = toRuntimeValue(v1)
-        }
-        if (v2 !is RuntimeValue) {
-            v2 = toRuntimeValue(v2)
-        }
-        TestUtils.assertRuntimeValueEquals(v1, v2, allowNonDetComparsion, prune, ordered, msg)
-//        if (m1 is RuntimeValue && m2 is RuntimeValue) {
-//        } else if(m1 is GridMat && m2 is RPointMatrix) { // temporal for compatibility
-//            fail("impl1")
-//        } else if(m1 is RPointMatrix && m2 is GridMat) { // temporal for compatibility
-//            fail("impl2")
-//        } else if (m1 is GridMat && m2 is GridMat) {
-//            return if (prune) {
-//                assertMatEquals(m1.prune(), m2.prune(), allowNonDetComparsion, msg)
-//            } else {
-//                assertMatEquals(m1, m2, allowNonDetComparsion, msg)
-//            }
-//        } else if (m1 is RangeGridMat && m2 is RangeGridMat) {
-//            return assertRangeMatEquals(m1, m2, allowNonDetComparsion, msg)
-//        } else if (m1 is Scalar && m2 is Scalar) {
-//            if (!compareDouble(m1.value, m2.value, allowNonDetComparsion)) {
-//                fail("Scalar not match: $m1 != $m2 $msg")
-//            }
-//        } else {
-//            fail("Type mismatch: $m1 != $m2 $msg")
-//        }
+        TestUtils.assertRuntimeValueEquals(
+                toRuntimeValue(m1),
+                toRuntimeValue(m2),
+                allowNonDetComparsion, prune, ordered, msg)
     }
 
 

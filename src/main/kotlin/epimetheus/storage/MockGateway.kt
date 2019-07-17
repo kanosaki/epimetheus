@@ -1,9 +1,9 @@
 package epimetheus.storage
 
-import epimetheus.engine.plan.RPointMatrix
-import epimetheus.engine.plan.RPoints
-import epimetheus.engine.plan.RRangeMatrix
-import epimetheus.engine.plan.RRanges
+import epimetheus.model.RPointMatrix
+import epimetheus.model.RPoints
+import epimetheus.model.RRangeMatrix
+import epimetheus.model.RRanges
 import epimetheus.model.*
 import epimetheus.pkg.textparse.ScrapedSample
 import it.unimi.dsi.fastutil.longs.LongArrayList

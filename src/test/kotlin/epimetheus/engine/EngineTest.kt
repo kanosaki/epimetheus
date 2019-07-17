@@ -1,7 +1,7 @@
 package epimetheus.engine
 
-import epimetheus.engine.plan.RConstant
-import epimetheus.engine.plan.RPointMatrix
+import epimetheus.model.RConstant
+import epimetheus.model.RPointMatrix
 import epimetheus.model.Metric
 import epimetheus.model.TestUtils.assertValueEquals
 import epimetheus.model.TimeFrames
@@ -76,7 +76,7 @@ class EngineTest {
             ))
             val interp = Engine(mg)
             val mat = interp.exec(c.query, c.tf)
-            assertValueEquals(c.expected, mat, msg = "case: $i")
+            assertValueEquals(c.expected, mat, msg = "case: $i", ordered = true)
         }
     }
 
@@ -185,4 +185,55 @@ class EngineTest {
             assertValueEquals(c.expected, mat, msg = "case: $i")
         }
     }
+
+    @Test
+    fun evalBinop() {
+        data class Param(val query: String, val tf: TimeFrames, val expected: RPointMatrix)
+
+        val cases = listOf(
+                Param("a",
+                        TimeFrames.instant(0),
+                        RPointMatrix.of(TimeFrames.instant(0),
+                                Metric.of("a", "b" to "1") to listOf(1.0),
+                                Metric.of("a", "b" to "2") to listOf(2.0)
+                        )
+                ),
+                Param("a",
+                        TimeFrames.instant(1),
+                        RPointMatrix.of(TimeFrames.instant(1),
+                                Metric.of("a", "b" to "1") to listOf(3.0),
+                                Metric.of("a", "b" to "2") to listOf(4.0)
+                        )
+                ),
+                Param("a",
+                        TimeFrames(0, 1, 1),
+                        RPointMatrix.of(TimeFrames(0, 1, 1),
+                                Metric.of("a", "b" to "1") to listOf(1.0, 3.0),
+                                Metric.of("a", "b" to "2") to listOf(2.0, 4.0)
+                        )
+                ),
+                Param("a",
+                        TimeFrames(1, 2, 1),
+                        RPointMatrix.of(TimeFrames(1, 2, 1),
+                                Metric.of("a", "b" to "1") to listOf(3.0, 3.0),
+                                Metric.of("a", "b" to "2") to listOf(4.0, 4.0)
+                        )
+                )
+        )
+        cases.forEachIndexed { i, c ->
+            val mg = MockGateway()
+            mg.pushScraped(0, listOf(
+                    ScrapedSample.create("a", 1.0, "b" to "1"),
+                    ScrapedSample.create("a", 2.0, "b" to "2")
+            ))
+            mg.pushScraped(1, listOf(
+                    ScrapedSample.create("a", 3.0, "b" to "1"),
+                    ScrapedSample.create("a", 4.0, "b" to "2")
+            ))
+            val interp = Engine(mg)
+            val mat = interp.exec(c.query, c.tf)
+            assertValueEquals(c.expected, mat, msg = "case: $i", ordered = true)
+        }
+    }
+
 }

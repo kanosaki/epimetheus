@@ -1,11 +1,8 @@
 package epimetheus.engine.primitive
 
 import epimetheus.engine.ExecContext
-import epimetheus.engine.plan.*
-import epimetheus.model.DoubleSlice
-import epimetheus.model.LongSlice
-import epimetheus.model.Mat
-import epimetheus.model.Metric
+import epimetheus.engine.plan.AggregatorPlanner
+import epimetheus.model.*
 import epimetheus.pkg.promql.AggregatorGroup
 import epimetheus.pkg.promql.AggregatorGroupType
 import epimetheus.pkg.promql.PromQLException

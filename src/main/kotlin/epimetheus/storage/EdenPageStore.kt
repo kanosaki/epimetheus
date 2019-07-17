@@ -1,7 +1,7 @@
 package epimetheus.storage
 
 import epimetheus.CacheName.Prometheus.FRESH_SAMPLES
-import epimetheus.engine.plan.RPoints
+import epimetheus.model.RPoints
 import epimetheus.model.*
 import epimetheus.pkg.textparse.ScrapedSample
 import it.unimi.dsi.fastutil.longs.Long2DoubleRBTreeMap

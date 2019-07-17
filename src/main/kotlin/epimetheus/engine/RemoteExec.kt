@@ -1,7 +1,7 @@
 package epimetheus.engine
 
 import epimetheus.engine.graph.PlanNode
-import epimetheus.engine.plan.RuntimeValue
+import epimetheus.model.RuntimeValue
 import epimetheus.engine.primitive.Aggregator
 import epimetheus.engine.primitive.Function
 import epimetheus.storage.IgniteGateway

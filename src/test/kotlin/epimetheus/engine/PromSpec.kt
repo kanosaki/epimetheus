@@ -1,8 +1,8 @@
 package epimetheus.engine
 
 import epimetheus.CacheName
-import epimetheus.engine.plan.RPointMatrix
-import epimetheus.engine.plan.RuntimeValue
+import epimetheus.model.RPointMatrix
+import epimetheus.model.RuntimeValue
 import epimetheus.model.*
 import epimetheus.pkg.promql.Expression
 import epimetheus.pkg.promql.PromQL

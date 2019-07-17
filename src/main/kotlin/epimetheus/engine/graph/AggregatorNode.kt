@@ -5,6 +5,8 @@ import epimetheus.engine.ExecContext
 import epimetheus.engine.plan.*
 import epimetheus.engine.primitive.MappingAggregator
 import epimetheus.engine.primitive.VariadicAggregator
+import epimetheus.model.RPointMatrix
+import epimetheus.model.RuntimeValue
 import epimetheus.pkg.promql.AggregatorGroup
 import epimetheus.pkg.promql.PromQLException
 

@@ -2,10 +2,15 @@ package epimetheus.engine.graph
 
 import epimetheus.engine.EngineContext
 import epimetheus.engine.ExecContext
-import epimetheus.engine.plan.*
+import epimetheus.engine.plan.BinOpPlanner
+import epimetheus.engine.plan.FixedMetric
+import epimetheus.engine.plan.MetricPlan
+import epimetheus.engine.plan.VariableMetric
 import epimetheus.engine.primitive.BOp
 import epimetheus.engine.primitive.NumericBinOp
 import epimetheus.engine.primitive.SetBinOp
+import epimetheus.model.RPointMatrix
+import epimetheus.model.RuntimeValue
 import epimetheus.pkg.promql.PromQLException
 import epimetheus.pkg.promql.VectorMatching
 

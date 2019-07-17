@@ -1,8 +1,8 @@
 package epimetheus.prometheus.rule
 
 import epimetheus.engine.Engine
-import epimetheus.engine.plan.RConstant
-import epimetheus.engine.plan.RPointMatrix
+import epimetheus.model.RConstant
+import epimetheus.model.RPointMatrix
 import epimetheus.job.JobExitStatus
 import epimetheus.job.JobRunnable
 import epimetheus.model.Metric
